@@ -1,0 +1,52 @@
+&runconf
+!====================================================================!
+nnests               = 1
+timeMax              = 86400        !in seconds. a day
+timestep             = 300          !in seconds
+outputFreq           = 600         !in seconds; could do 600
+releaseFilename      = "ReleaseFile_tester"
+!====================================================================!
+!Turbulence Module
+turb                 = .true.
+horDiff              = 0.4749636132     !horizontal diffusivity (m2/s2). nest is 330m
+vertDiff             = 0.004749636132  !vertical diffusivity (m2/s2). arbitrarily divided the horiz. diff. by 100 for this
+turbTimestep         = 300             !in seconds
+!====================================================================!
+!Periodic Boundary Condition
+periodicbc           = .false.
+!====================================================================!
+!Landmask Boundary Condition
+avoidcoast           = .true.   !could try false. when true, it may be binning larvae within the 160-m depth range. not sure if we want that
+!====================================================================!
+!Backward Tracking Module
+backward             = .false.
+!====================================================================!
+!Output files in ASCII instead of netCDF
+ascii                = .false.
+!====================================================================!
+!Flag for putting particles back in the ocean when they go through the
+!uppermost depth level (limit particle movement to upper layer?)
+upperlevelsurface       = .true.
+!====================================================================!
+!Flag for looping through the velocity fields
+loopfiles               = .false.
+loopfilesstartyear      = 0
+loopfilesstartmonth     = 0
+loopfilesstartday       = 0
+loopfilesendyear        = 0
+loopfilesendmonth       = 0
+loopfilesendday         = 0
+!====================================================================!
+!Options for saving restart files and restarting
+writerestart         = .false.
+restartfromfile      = .false.
+restartwritefreq     = 0            !in seconds
+!====================================================================!
+!Options for mixed layer physics
+mixedlayerphysics    = .false.
+mixedlayerwmax       = 0
+!====================================================================!
+!Option to turn the trajectory output off (set .false.)
+trajout              = .true.
+!====================================================================!
+&end

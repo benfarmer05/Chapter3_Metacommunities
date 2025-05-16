@@ -1,0 +1,52 @@
+&runconf
+!====================================================================!
+nnests               = 1
+timeMax              = 1641600        !in seconds- 19 day test
+timestep             = 3600            !in seconds- every hour
+outputFreq           = 10800           !in seconds- 3 hours
+releaseFilename      = "relfile.txt"
+!====================================================================!
+!Turbulence Module
+turb                 = .true.
+horDiff              = 13.5815      !horizontal diffusivity (m2/s2). 1.26*(10^-4)*(RESinKM^1.42), where res is 3500 m
+vertDiff             = 0.135815       !vertical diffusivity (m2/s2). arbitrarily set to 100X less than horDiff
+turbTimestep         = 3600        !in seconds
+!====================================================================!
+!Periodic Boundary Condition
+periodicbc           = .false.
+!====================================================================!
+!Landmask Boundary Condition
+avoidcoast           = .true.
+!====================================================================!
+!Backward Tracking Module
+backward             = .false.
+!====================================================================!
+!Output files in ASCII instead of netCDF
+ascii                = .true.
+!====================================================================!
+!Flag for putting particles back in the ocean when they go through the
+!uppermost depth level (limit particle movement to upper layer?)
+upperlevelsurface       = .true.
+!====================================================================!
+!Flag for looping through the velocity fields
+loopfiles               = .false.
+loopfilesstartyear      = 0
+loopfilesstartmonth     = 0
+loopfilesstartday       = 0
+loopfilesendyear        = 0
+loopfilesendmonth       = 0
+loopfilesendday         = 0
+!====================================================================!
+!Options for saving restart files and restarting
+writerestart         = .false.
+restartfromfile      = .false.
+restartwritefreq     = 0            !in seconds
+!====================================================================!
+!Options for mixed layer physics
+mixedlayerphysics    = .false.
+mixedlayerwmax       = 0
+!====================================================================!
+!Option to turn the trajectory output off (set .false.)
+trajout              = .true.
+!====================================================================!
+&end

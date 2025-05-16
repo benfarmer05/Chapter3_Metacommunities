@@ -1,0 +1,41 @@
+	&ibm
+	!==============================================================!
+	! Buoyancy Module
+	Buoyancy          	= .false.
+	buoyancyFilename  	= "ovm_pink_shrimp_rare"
+	!==============================================================!
+	! Seascape Module
+	polygon		        = .false.
+	polyFilename 	    	= "poly_example.xyz"
+	settlementStart	  	= 2		!in days
+	!==============================================================!
+	! Probability Matrix of Vertical Migration
+	ibio 			= .false.
+	ibioFilename	    	= "vert_matrix_LANA"
+	ibioTimeStep	    	= 43200	!in seconds
+	!==============================================================!
+	! Mortality Rate
+	mort			= .false.
+	halflife		= 561600		!in seconds
+	!==============================================================!
+	! Different Particle Attributes Module
+	diffpart		= .false.
+	diffpartFilename  	= ""
+	!==============================================================!
+	! Combined Buoyancy and Vertical Migration
+	massSpawning		= .false.
+	larvaStart		= 7		!in days
+	!==============================================================!
+	! Selective Tidal Stream Transport
+	tidalmovement		= .false.
+	tstStart		= 14		!in days
+	!==============================================================!
+	! Adding strata for 3D polygons
+	strata			= .false.
+	strataFilename		= "strata_example"
+	!==============================================================!
+	! Output temperature/salinity in netcdf file
+	outputtemp		= .false.
+	outputsaln		= .false.
+	!==============================================================!
+	$end

@@ -1,0 +1,328 @@
+--------------------------------------
+Running PBS prologue script
+--------------------------------------
+User and Job Data:
+--------------------------------------
+Job ID:    1030451.smic3
+Username:  bfarme8
+Group:     Users
+Date:      30-Jan-2024 16:30
+Node:      smic004 (20943)
+--------------------------------------
+PBS has allocated the following nodes:
+
+smic004
+smic009
+
+A total of 40 processors on 2 nodes allocated
+---------------------------------------------
+Check nodes and clean them of stray processes
+---------------------------------------------
+Checking node smic004 16:30:42 
+Checking node smic009 16:30:45 
+Done clearing all the allocated nodes
+------------------------------------------------------
+Concluding PBS prologue script - 30-Jan-2024 16:30:45
+------------------------------------------------------
+ ==========================================
+ File name  : traj_file_12
+ Total number of release events     : 1 (numbers 12 to 12)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_02
+ Total number of release events     : 1 (numbers 2 to 2)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_14
+ Total number of release events     : 1 (numbers 14 to 14)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_06
+ Total number of release events     : 1 (numbers 6 to 6)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_18
+ Total number of release events     : 1 (numbers 18 to 18)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_04
+ Total number of release events     : 1 (numbers 4 to 4)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_08
+ Total number of release events     : 1 (numbers 8 to 8)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_20
+ Total number of release events     : 1 (numbers 20 to 20)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_10
+ Total number of release events     : 1 (numbers 10 to 10)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_16
+ Total number of release events     : 1 (numbers 16 to 16)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_11
+ Total number of release events     : 1 (numbers 11 to 11)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_15
+ Total number of release events     : 1 (numbers 15 to 15)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_01
+ Total number of release events     : 1 (numbers 1 to 1)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_17
+ Total number of release events     : 1 (numbers 17 to 17)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_09
+ Total number of release events     : 1 (numbers 9 to 9)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_19
+ Total number of release events     : 1 (numbers 19 to 19)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_13
+ Total number of release events     : 1 (numbers 13 to 13)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_05
+ Total number of release events     : 1 (numbers 5 to 5)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_03
+ Total number of release events     : 1 (numbers 3 to 3)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_07
+ Total number of release events     : 1 (numbers 7 to 7)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_30
+ Total number of release events     : 1 (numbers 30 to 30)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_34
+ Total number of release events     : 1 (numbers 34 to 34)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_28
+ Total number of release events     : 1 (numbers 28 to 28)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_24
+ Total number of release events     : 1 (numbers 24 to 24)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_26
+ Total number of release events     : 1 (numbers 26 to 26)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_38
+ Total number of release events     : 1 (numbers 38 to 38)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ ==========================================
+ File name  : traj_file_36
+ Total number of release events     : 1 (numbers 36 to 36)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ ==========================================
+ File name  : traj_file_32
+ Total number of release events     : 1 (numbers 32 to 32)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_22
+ Total number of release events     : 1 (numbers 22 to 22)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_40
+ Total number of release events     : 1 (numbers 40 to 40)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_39
+ Total number of release events     : 1 (numbers 39 to 39)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_29
+ Total number of release events     : 1 (numbers 29 to 29)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_21
+ Total number of release events     : 1 (numbers 21 to 21)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_37
+ Total number of release events     : 1 (numbers 37 to 37)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_25
+ Total number of release events     : 1 (numbers 25 to 25)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_31
+ Total number of release events     : 1 (numbers 31 to 31)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_27
+ Total number of release events     : 1 (numbers 27 to 27)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_23
+ Total number of release events     : 1 (numbers 23 to 23)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_33
+ Total number of release events     : 1 (numbers 33 to 33)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+ ==========================================
+ File name  : traj_file_35
+ Total number of release events     : 1 (numbers 35 to 35)
+ Total number of particles released : 1
+ Total number of time steps         : 457
+ Total number of time steps in output file: 153
+ ==========================================
+------------------------------------------------------
+Running PBS epilogue script    - 30-Jan-2024 16:30:52
+------------------------------------------------------
+Checking node smic004 (MS)
+Checking node smic009 ; cleared cache ; ok
+Checking node smic004 ; cleared cache ; ok
+------------------------------------------------------
+Concluding PBS epilogue script - 30-Jan-2024 16:30:58
+------------------------------------------------------
+Exit Status:     0
+Job ID:          1030451.smic3
+Username:        bfarme8
+Group:           Users
+Job Name:        tester
+Session Id:      20942
+Resource Limits: ncpus=1,neednodes=2:ppn=20,nodes=2:ppn=20,walltime=72:00:00
+Resources Used:  cput=00:01:07,mem=468kb,vmem=13780kb,walltime=00:00:12
+Queue Used:      workq
+Account String:  hpc_sel_smic_5
+Node:            smic004
+Process id:      21746
+------------------------------------------------------

@@ -1,0 +1,43 @@
+&ibm
+!==============================================================!
+! Buoyancy Module
+Buoyancy          	= .false.
+!dens_particle        = 842.5           !in kg/m3
+!diam_particle        = 0.00025         !in meters
+buoyancyFilename  	= "insert_here"
+!==============================================================!
+! Seascape Module             (do I need this for the connectivity matrix output? what polygons does it need?)
+polygon		        = .false.
+polyFilename 	    	= "poly_example.xyz"
+settlementStart	  	= 2		!in days
+!==============================================================!
+! Probability Matrix of Vertical Migration
+ibio 			= .false.
+ibioFilename	    	= "ovm_pink_shrimp_rare" 
+ibioTimeStep	    	= 43200	!in seconds
+!==============================================================!
+! Mortality Rate               (may want to use this to simulate loss of disease vector viability or death of pathogen)
+mort			= .false.
+halflife		= 561600		!in seconds
+!==============================================================!
+! Different Particle Attributes Module
+diffpart		= .false.
+diffpartFilename  	= ""
+!==============================================================!
+! Combined Buoyancy and Vertical Migration
+massSpawning		= .false.
+larvaStart		= 7		!in days
+!==============================================================!
+! Selective Tidal Stream Transport
+tidalmovement		= .false.
+tstStart		= 14		!in days
+!==============================================================!
+! Adding strata for 3D polygons
+strata			= .false.
+strataFilename		= "strata_example"
+!==============================================================!
+! Output temperature/salinity in netcdf file
+outputtemp		= .false.
+outputsaln		= .false.
+!==============================================================!
+$end

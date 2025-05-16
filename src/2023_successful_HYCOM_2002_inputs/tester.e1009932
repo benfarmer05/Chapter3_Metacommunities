@@ -1,0 +1,8 @@
+Autoloading mvapich2/2.3.3/intel-19.0.5
+Autoloading netcdf-c/4.7.3/intel-19.0.5-mvapich-2.3.3
+Autoloading hdf5/1.10.6/intel-19.0.5-mvapich-2.3.3
+
+Loading netcdf-fortran/4.5.2/intel-19.0.5-mvapich-2.3.3
+  Loading requirement: intel/19.0.5 mvapich2/2.3.3/intel-19.0.5
+    hdf5/1.10.6/intel-19.0.5-mvapich-2.3.3
+    netcdf-c/4.7.3/intel-19.0.5-mvapich-2.3.3

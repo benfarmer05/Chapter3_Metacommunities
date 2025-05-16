@@ -1,0 +1,41 @@
+&nest_input
+!this is 330m domain
+ xaxis = "Lon"
+ yaxis = "Lat"
+ zaxis = "Depth"
+ taxis = "Time"
+ xstart = 299.4877304986       !unclear if this can be toggled off. may only be required for downloading files. in C-grid, these numbers would all be different by grid.
+ xend = 301.1666980147         !unclear if this can be toggled off. may only be required for downloading files. in C-grid, these numbers would all be different by grid.
+ ystart = 17.0786961067       !unclear if this can be toggled off. may only be required for downloading files. in C-grid, these numbers would all be different by grid.
+ yend = 19.2053250494         !unclear if this can be toggled off. may only be required for downloading files. in C-grid, these numbers would all be different by grid.
+ zstart = 0              !unclear if this can be toggled off. may only be required for downloading files. in C-grid, these numbers would all be different by grid.
+ zend = 160 !unclear if this can be toggled off. may only be required for downloading files. in C-grid, these numbers would all be different by grid.
+ zaxis_positive_direction = "down"
+ tstart_yy = 2019        !unclear if this can be toggled off. may only be required for downloading files.
+ tstart_mm = 2           !unclear if this can be toggled off. may only be required for downloading files.
+ tstart_dd = 21           !unclear if this can be toggled off. may only be required for downloading files.
+ tend_yy = 2019          !unclear if this can be toggled off. may only be required for downloading files.
+ tend_mm = 2            !unclear if this can be toggled off. may only be required for downloading files.
+ tend_dd = 24            !unclear if this can be toggled off. may only be required for downloading files.
+ time_step = 3600         !there is one hour (3600 seconds) separating each hydrodynamic file
+ lon_nameU = "lonu"
+ lat_nameU = "latu"
+ dep_nameU = "Depth"
+ lon_nameV = "lonv"
+ lat_nameV = "latv"
+ dep_nameV = "Depth"
+ lon_nameW = "lonw"
+ lat_nameW = "latw"
+ dep_nameW = "Depth"
+ depth_conversion_factor = 1        !depth is already in m, which is how CMS wants it
+ time_name = "Time"         !keep an eye on this; may require formatting as 'time_nameU', 'time_nameV' etc.
+ uvel_name = "u"            !these could also trip CMS if formatted incorrectly
+ vvel_name = "v"
+ wvel_name = "w"
+ wvel_positive_direction = "upward"
+ velocity_conversion_factor = 1     !velocity is already in m/s, which is how CMS wants it
+ angle_file = ""
+ fill_value = 1.2676506E30
+ agrid = .false.
+ !orthogrid=.true.          !not sure what this is! Sonaljit's grid is orthogonoal curvilinear. may try toggling this on
+$end

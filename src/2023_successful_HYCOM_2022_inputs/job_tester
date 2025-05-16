@@ -1,0 +1,12 @@
+#!/bin/bash
+#PBS -q workq
+#PBS -l nodes=2:ppn=20
+#PBS -l walltime=72:00:00
+#PBS -o tester.out
+#PBS -M bfarme8@lsu.edu
+#PBS -N tester
+
+#module load netcdf-c/4.7.3/intel-19.0.5-mvapich-2.3.3
+module load netcdf-fortran/4.5.2/intel-19.0.5-mvapich-2.3.3
+cd $PBS_O_WORKDIR
+mpirun -np 40 -machinefile $PBS_NODEFILE ./cms tester
