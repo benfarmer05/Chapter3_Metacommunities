@@ -23,10 +23,17 @@ clear;clc
 %   Polygon Longitude Latitude Depth Number Year Month Day Second
 %   1       277.2     24.66    0     10     2016 1     1   0
 
-%%
-scriptDrive = '/Users/benja/Library/CloudStorage/Box-Box/Big_Projects/Chapter3_Metacommunities/Release';
+%% setup
 
-cd(scriptDrive)
+% Get the project root directory
+projectPath = matlab.project.rootProject().RootFolder;
+
+% Define paths relative to the project root
+dataPath = fullfile(projectPath, 'data');
+
+outputPath = fullfile(projectPath, 'output');
+
+%%
 
 %parameters for start and end dates
 startDate = datetime(2019, 9, 1); % Example: Start date
@@ -35,7 +42,7 @@ dateRange = startDate:endDate;
 
 %read in release points from GIS output and ensure they are sorted by
 % their unique ID
-relpoints = readmatrix('points_650_none-on-land.csv');
+relpoints = readmatrix(fullfile(dataPath, 'points_650_none-on-land.csv'));
 relpoints = relpoints(:, 10:12);
 relpoints = sortrows(relpoints, 1);
 
@@ -108,5 +115,16 @@ release = [data_str_padded{:}];
 %write the matrix to the file with the constructed file name
 currentDateTime = datetime('now', 'Format', 'yyyyMMdd_HHmmss');
 currentDateTimeStr = string(currentDateTime);
-fileName = "ReleaseFile_tester_" + currentDateTimeStr + ".txt";
+fileName = "ReleaseFile_USVI_2019_" + currentDateTimeStr + ".txt";
+writematrix(release, fileName, 'delimiter', '\t');
+
+
+% STOPPING POINT 16 may 2025 - adjusting the below to match the above, but
+% with better pathing
+
+
+% Create the full path for your file
+fileName = fullfile(outputPath, "ReleaseFile_USVI_2019_" + currentDateTimeStr + ".txt");
+
+% Write your data
 writematrix(release, fileName, 'delimiter', '\t');
