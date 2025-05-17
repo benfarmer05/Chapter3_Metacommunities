@@ -1,7 +1,7 @@
 %% Script to create a release file for the Connectivity Modeling System
 %   simulating the dispersal and connectivity of SCTLD in the Virgin
 %   Islands & Puerto Rico
-%   22 May 2024
+%   17 May 2025
 
 clear;clc
 
@@ -81,50 +81,46 @@ particles_CMS = repmat(10, numpoints * num_releases, 1); %this could also vary b
 year_CMS = repmat(year(startDate), numpoints * num_releases, 1); %if more years are desired, should define and 'repmat' or similar above
 time_CMS = zeros(numpoints * num_releases, 1); %can choose to release at different times of day if desired
 
-% Convert numeric arrays to strings
-data = {IDs_CMS, longitudes_CMS, latitudes_CMS, depths_CMS, particles_CMS, year_CMS, months_CMS, days_CMS, time_CMS};
-data_str = cellfun(@string, data, 'UniformOutput', false);
 
-% Function to pad strings with leading zeros to the maximum length in the array
-pad_with_zeros = @(str_array) compose("%0" + max(strlength(str_array)) + "d", str2double(str_array));
+% Create a cell array to store all data as strings with proper formatting
+numRows = length(IDs_CMS);
+outputData = cell(numRows, 9);
 
-% Apply zero-padding to each column and convert to string arrays
-data_str_padded = cellfun(@(col) string(pad_with_zeros(col)), data_str, 'UniformOutput', false);
+% Convert each column to properly formatted strings
+for i = 1:numRows
+    outputData{i, 1} = sprintf('%d', IDs_CMS(i));                   % ID - integer
+    outputData{i, 2} = sprintf('%.9f', longitudes_CMS(i));          % Longitude - float with 9 decimal places
+    outputData{i, 3} = sprintf('%.9f', latitudes_CMS(i));           % Latitude - float with 9 decimal places
+    outputData{i, 4} = sprintf('%d', depths_CMS(i));                % Depth - integer
+    outputData{i, 5} = sprintf('%d', particles_CMS(i));             % Particles - integer
+    outputData{i, 6} = sprintf('%d', year_CMS(i));                  % Year - integer
+    outputData{i, 7} = sprintf('%d', months_CMS(i));                % Month - integer
+    outputData{i, 8} = sprintf('%d', days_CMS(i));                  % Day - integer
+    outputData{i, 9} = sprintf('%d', time_CMS(i));                  % Time - integer
+end
 
-% Manually handle longitudes and latitudes to ensure they are not in scientific notation
-longitudes_str = arrayfun(@(x) sprintf('%.16g', x), longitudes_CMS, 'UniformOutput', false);
-latitudes_str = arrayfun(@(x) sprintf('%.16g', x), latitudes_CMS, 'UniformOutput', false);
-% longitudes_str_padded = cellfun(@(col) string(pad_with_zeros(col)), longitudes_str, 'UniformOutput', false);
-% latitudes_str_padded = cellfun(@(col) string(pad_with_zeros(col)), latitudes_str, 'UniformOutput', false);
-
-% Determine the maximum string length for longitudes and latitudes
-max_length_longitude = max(strlength(longitudes_str));
-max_length_latitude = max(strlength(latitudes_str));
-
-% Apply zero-padding to longitudes and latitudes at the end and convert to string arrays
-longitudes_str_padded = cellfun(@(col) sprintf('%s%0.*d', col, max_length_longitude - numel(col), 0), longitudes_str, 'UniformOutput', false);
-latitudes_str_padded = cellfun(@(col) sprintf('%s%0.*d', col, max_length_latitude - numel(col), 0), latitudes_str, 'UniformOutput', false);
-
-% Replace the longitudes and latitudes in the padded data
-data_str_padded{2} = string(longitudes_str_padded);
-data_str_padded{3} = string(latitudes_str_padded);
-
-% Combine padded columns into the release matrix
-release = [data_str_padded{:}];
-
-%write the matrix to the file with the constructed file name
+% Open a file for writing
 currentDateTime = datetime('now', 'Format', 'yyyyMMdd_HHmmss');
 currentDateTimeStr = string(currentDateTime);
 fileName = "ReleaseFile_USVI_2019_" + currentDateTimeStr + ".txt";
-writematrix(release, fileName, 'delimiter', '\t');
+fileID = fopen(fullfile(outputPath, fileName), 'w');
 
+% Write formatted data to file with consistent spacing
+for i = 1:numRows
+    fprintf(fileID, '%-4s %-15s %-15s %-2s %-3s %-6s %-2s %-3s %-2s\n', ...
+        outputData{i, 1}, ...         % ID (Polygon)
+        outputData{i, 2}, ...         % Longitude
+        outputData{i, 3}, ...         % Latitude
+        outputData{i, 4}, ...         % Depth
+        outputData{i, 5}, ...         % Particles (Number)
+        outputData{i, 6}, ...         % Year
+        outputData{i, 7}, ...         % Month
+        outputData{i, 8}, ...         % Day
+        outputData{i, 9});            % Second (Time)
+end
 
-% STOPPING POINT 16 may 2025 - adjusting the below to match the above, but
-% with better pathing
+% Close the file
+fclose(fileID);
 
-
-% Create the full path for your file
-fileName = fullfile(outputPath, "ReleaseFile_USVI_2019_" + currentDateTimeStr + ".txt");
-
-% Write your data
-writematrix(release, fileName, 'delimiter', '\t');
+% Display confirmation message
+fprintf('Release file successfully created: %s\n', fileName);

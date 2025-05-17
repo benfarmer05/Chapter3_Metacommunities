@@ -7,31 +7,44 @@
 %   settle on the most useful depth - the CMS likely interpolates the
 %   "seafloor" using its available grid system, so I probably want to
 %   use some kind of interpolation scheme. still testing that out
-% 12 June 2024
+% 17 May 2025
 
 clear;clc
 
-inputDrive = '/Users/benja/Library/CloudStorage/Box-Box/Big_Projects/Chapter3_Metacommunities/CMS-formatting_Spring2022_to_Summer2023';
-scriptDrive = '/Users/benja/Library/CloudStorage/Box-Box/Big_Projects/Chapter3_Metacommunities/Release';
-writeDrive = '/Users/benja/testCMS'; %'/Volumes/UVI_Hydro_2019-2020/CMS_inputs_nozeta'; %
-CMSfilesDrive = '/Users/benja/testCMS/tests_for_depth-assignment'; %'/Volumes/UVI_Hydro_2019-2020/CMS_inputs_nozeta'; %
+%% setup
 
+% Get the project root directory
+projectPath = matlab.project.rootProject().RootFolder;
+
+% Define paths relative to the project root
+dataPath = fullfile(projectPath, 'data');
+srcPath = fullfile(projectPath, 'src');
+outputPath = fullfile(projectPath, 'output');
+tempPath = fullfile(projectPath, 'temp');
+
+%%
+
+% % NOTE - may need to return to this
+% CMSfilesDrive = '/Users/benja/testCMS/tests_for_depth-assignment'; %'/Volumes/UVI_Hydro_2019-2020/CMS_inputs_nozeta'; %
+
+% NOTE - may need to adjust first value [currently 0.26] to reflect what
+% was done with roms2cms_A_grid.m
 zlevels = [0.26 1 2 4 6 8 10 12 14 16 18 20 22 24 26 29 32 35 38 42 46 50 60 70 85 100 120 140 160 190 220 250]'; %32 layers down to 250 m depth, mid-depth hi-res
 
+% NOTE / STOPPING POINT - for the below, was previously just pulling a
+% random hydro file I'd created for the CMS. just need to adopt this
+% approach with proper pathing, and also double-check how I created my
+% hydro files
+
 %randomly select a CMS-ready file
-cd(writeDrive)
-myDir = pwd;
-files = dir(fullfile(myDir,'nest_1_*'));
-randomIndex = randi(length(files)); %generate a random index between 1 and the number of files
+files = dir(fullfile(tempPath, 'nest_1_*'));
+randomIndex = randi(length(files)); % generate a random index between 1 and the number of files
 baseFileName = files(randomIndex).name;
-fullFileName = fullfile(myDir, baseFileName);
-[~, randomfile, ext] = fileparts(fullFileName); %extract the file name from the full path
-randomfile = [randomfile ext];
-ncdisp(randomfile)
+ncdisp(fullfile(tempPath, baseFileName))  % Pass the full path to ncdisp
 
 %CMS coordinate systems
-longitudes_CMS = ncread(randomfile, 'Longitude');
-latitudes_CMS = ncread(randomfile, 'Latitude');
+longitudes_CMS = ncread(fullfile(tempPath, baseFileName), 'Longitude');
+latitudes_CMS = ncread(fullfile(tempPath, baseFileName), 'Latitude');
 
 % Create a grid of all longitude and latitude pairs
 [lat_grid, lon_grid] = meshgrid(latitudes_CMS, longitudes_CMS);
@@ -42,20 +55,19 @@ lat_grid_indices = lat_grid(:);
 
 %CMS seafloor masks
 fill_value = single(1.2676506e+30);
-mask_u_seafloor = ncread(randomfile, 'zu');
+mask_u_seafloor = ncread(fullfile(tempPath, baseFileName), 'zu');
 mask_u_seafloor(mask_u_seafloor==fill_value) = 0; %seafloor is 0's
 mask_u_seafloor(mask_u_seafloor ~= 0) = 1; %the ocean is 1's
-mask_v_seafloor = ncread(randomfile, 'zv'); 
+mask_v_seafloor = ncread(fullfile(tempPath, baseFileName), 'zv'); 
 mask_v_seafloor(mask_v_seafloor==fill_value) = 0;
 mask_v_seafloor(mask_v_seafloor ~= 0) = 1;
-mask_rho_seafloor = ncread(randomfile, 'zw'); 
+mask_rho_seafloor = ncread(fullfile(tempPath, baseFileName), 'zw'); 
 mask_rho_seafloor(mask_rho_seafloor==fill_value) = 0; 
 mask_rho_seafloor(mask_rho_seafloor ~= 0) = 1;
 
 %extract release point coordinates from GIS output and ensure they are
 % sorted by their unique ID
-cd(scriptDrive)
-relpoints = readmatrix('points_650_none-on-land.csv');
+relpoints = readmatrix(fullfile(dataPath, 'points_650_none-on-land.csv'));
 relpoints = relpoints(:, 10:12);
 relpoints = sortrows(relpoints, 1);
 
@@ -191,7 +203,7 @@ disp(release_depths);
 
 % STOPPING POINT
 %   11 June 2024
-%    - still need to address NaNs in 'release_depths' and the few cases
+%    - still need to address NaNs in 'release_depths' (nnz(isnan(release_depths))) and the few cases
 %    where it actually produces a point *deeper* rather than shallower than
 %    the shotgun approach above (which produced 'deepest_depth')
 %    - Then, address jittering the points within their release polygon (and
