@@ -1,5 +1,5 @@
 %% Script to create a landmask from USCROMS hydrodynamic files
-%   20 May 2025
+%   21 May 2025
 
 clear;clc
 
@@ -16,16 +16,32 @@ tempPath = fullfile(projectPath, 'temp');
 
 %%
 
-%extract USCROMS coordinates
-USCROMSgrid = 'vigrid.nc';
-% ncdisp(fullfile(dataPath, USCROMSgrid))  % Pass the full path to ncdisp
-longitudes_rho_USCROMS = ncread(fullfile(dataPath, USCROMSgrid), 'lon_rho') + 360;
-latitudes_rho_USCROMS = ncread(fullfile(dataPath, USCROMSgrid), 'lat_rho');
-longitudes_u_USCROMS = ncread(fullfile(dataPath, USCROMSgrid), 'lon_u') + 360;
-latitudes_u_USCROMS = ncread(fullfile(dataPath, USCROMSgrid), 'lat_u');
-longitudes_v_USCROMS = ncread(fullfile(dataPath, USCROMSgrid), 'lon_v') + 360;
-latitudes_v_USCROMS = ncread(fullfile(dataPath, USCROMSgrid), 'lat_v');
-mask = ncread(fullfile(dataPath, USCROMSgrid), 'mask_rho');
+% %extract USCROMS coordinates
+% USCROMSgrid = 'vigrid.nc';
+% % ncdisp(fullfile(dataPath, USCROMSgrid))  % Pass the full path to ncdisp
+% longitudes_rho_USCROMS = ncread(fullfile(dataPath, USCROMSgrid), 'lon_rho') + 360;
+% latitudes_rho_USCROMS = ncread(fullfile(dataPath, USCROMSgrid), 'lat_rho');
+% longitudes_u_USCROMS = ncread(fullfile(dataPath, USCROMSgrid), 'lon_u') + 360;
+% latitudes_u_USCROMS = ncread(fullfile(dataPath, USCROMSgrid), 'lat_u');
+% longitudes_v_USCROMS = ncread(fullfile(dataPath, USCROMSgrid), 'lon_v') + 360;
+% latitudes_v_USCROMS = ncread(fullfile(dataPath, USCROMSgrid), 'lat_v');
+% mask = ncread(fullfile(dataPath, USCROMSgrid), 'mask_rho');
+% 
+% %construct landmasks for USCROMS u- and v-grids
+% USCROMSocean = 'croco_his.04608.nc';
+% % ncdisp(fullfile(dataPath, USCROMSocean))  % Pass the full path to ncdisp
+% uvel_USCROMS = ncread(fullfile(dataPath, USCROMSocean), 'u');
+% uvel_USCROMS = uvel_USCROMS(:,:,:,1);
+% uvel_USCROMS = uvel_USCROMS(:,:,size(uvel_USCROMS, 3):-1:1); %flip so velocities are surface to bottom
+% uvel_USCROMS = uvel_USCROMS(:,:,1); %extract surface layer
+% mask_u_USCROMS = uvel_USCROMS;
+% mask_u_USCROMS(mask_u_USCROMS ~= 0) = 1; %the ocean is 1's, land is 0's
+% vvel_USCROMS = ncread(fullfile(dataPath, USCROMSocean), 'v');
+% vvel_USCROMS = vvel_USCROMS(:,:,:,1);
+% vvel_USCROMS = vvel_USCROMS(:,:,size(vvel_USCROMS, 3):-1:1); %flip so velocities are surface to bottom
+% vvel_USCROMS = vvel_USCROMS(:,:,1); %extract surface layer
+% mask_v_USCROMS = vvel_USCROMS;
+% mask_v_USCROMS(mask_v_USCROMS ~= 0) = 1;
 
 %extract random sigma-to-z converted CMS file and its coordinates
 files = dir(fullfile(tempPath, 'nest_1_*'));
@@ -34,23 +50,8 @@ CMSname = files(randomIndex).name;
 % ncdisp(fullfile(tempPath, CMSname))  % Pass the full path to ncdisp
 templon_CMS = ncread(fullfile(tempPath, CMSname), 'Longitude');
 templat_CMS = ncread(fullfile(tempPath, CMSname), 'Latitude');
-[longitudes_CMS, latitudes_CMS] = meshgrid(templat_CMS', templon_CMS); %convert to meshgrid format of USCROMS
-
-%construct landmasks for USCROMS u- and v-grids
-USCROMSocean = 'croco_his.04608.nc';
-% ncdisp(fullfile(dataPath, USCROMSocean))  % Pass the full path to ncdisp
-uvel_USCROMS = ncread(fullfile(dataPath, USCROMSocean), 'u');
-uvel_USCROMS = uvel_USCROMS(:,:,:,1);
-uvel_USCROMS = uvel_USCROMS(:,:,size(uvel_USCROMS, 3):-1:1); %flip so velocities are surface to bottom
-uvel_USCROMS = uvel_USCROMS(:,:,1); %extract surface layer
-mask_u_USCROMS = uvel_USCROMS;
-mask_u_USCROMS(mask_u_USCROMS ~= 0) = 1; %the ocean is 1's, land is 0's
-vvel_USCROMS = ncread(fullfile(dataPath, USCROMSocean), 'v');
-vvel_USCROMS = vvel_USCROMS(:,:,:,1);
-vvel_USCROMS = vvel_USCROMS(:,:,size(vvel_USCROMS, 3):-1:1); %flip so velocities are surface to bottom
-vvel_USCROMS = vvel_USCROMS(:,:,1); %extract surface layer
-mask_v_USCROMS = vvel_USCROMS;
-mask_v_USCROMS(mask_v_USCROMS ~= 0) = 1;
+% [longitudes_CMS, latitudes_CMS] = meshgrid(templat_CMS', templon_CMS); %convert to meshgrid format of USCROMS
+[latitudes_CMS, longitudes_CMS] = meshgrid(templat_CMS', templon_CMS); %convert to meshgrid format of USCROMS
 
 %construct landmask for CMS unified Arakawa grid (A-grid)
 % NOTE - 1st layer here is the surface; 32nd layer is the seafloor
@@ -70,21 +71,57 @@ mask_w_CMS(abs(mask_w_CMS) ~= 0) = 1; %the ocean is 1's, land is 0's
 mask_u_CMS(abs(mask_u_CMS) ~= 0) = 1; %the ocean is 1's, land is 0's
 mask_v_CMS(abs(mask_v_CMS) ~= 0) = 1; %the ocean is 1's, land is 0's
 
-
 %% THE BELOW IS FOR CMS
 
-%% Construct the landmask polygons (boundaries) for USCROMS
+%% Construct the landmask polygons (boundaries)
 
-%rho
+% %plot masks
+% figure('Position', [100, 100, 1000, 800]);
+% subplot(2, 1, 1);
+% pcolor(latitudes_CMS, longitudes_CMS, mask_u_CMS);
+% shading flat;
+% colorbar;
+% set(gca, 'YDir', 'normal');  % 'normal' = bottom to top, 'reverse' = top to bottom
+% title('Mask Data (pcolor)');
+% xlabel('Longitude');
+% ylabel('Latitude');
+% axis tight;
+% colormap jet;
+% 
+% figure('Position', [100, 100, 1000, 800]);
+% subplot(2, 1, 1);
+% pcolor(latitudes_CMS, longitudes_CMS, mask_v_CMS);
+% shading flat;
+% colorbar;
+% set(gca, 'YDir', 'normal');  % 'normal' = bottom to top, 'reverse' = top to bottom
+% title('Mask Data (pcolor)');
+% xlabel('Longitude');
+% ylabel('Latitude');
+% axis tight;
+% colormap jet;
+% 
+% figure('Position', [100, 100, 1000, 800]);
+% subplot(2, 1, 1);
+% pcolor(latitudes_CMS, longitudes_CMS, mask_w_CMS);
+% shading flat;
+% colorbar;
+% set(gca, 'YDir', 'normal');  % 'normal' = bottom to top, 'reverse' = top to bottom
+% title('Mask Data (pcolor)');
+% xlabel('Longitude');
+% ylabel('Latitude');
+% axis tight;
+% colormap jet;
+
+%rho (w-velocity)
 % Binary landmask contours
-mask_plot = mask;
+mask_plot = mask_w_CMS;
 mask_plot(mask_plot == 0) = NaN;
 mask_plot(~isnan(mask_plot)) = 0;
 mask_plot(isnan(mask_plot)) = 1;
 
 % Lon/lat vectors
-lat = latitudes_rho_USCROMS(1, :)';
-lon = longitudes_rho_USCROMS(:, 1);
+lat = latitudes_CMS(1, :)';
+lon = longitudes_CMS(:, 1);
 
 % Make the landmask
 trace = bwboundaries(mask_plot); 
@@ -94,15 +131,15 @@ for i = 1:length(trace)
 end
 
 % Create land polygons
-land = struct();
+land_CMS = struct();
 for k = 1:length(trace)
-    land(k).Geometry = 'Polygon';
+    land_CMS(k).Geometry = 'Polygon';
     Xs = trace{k}(:, 1); % Might have to subtract 360 at the end
     Xs(end + 1) = NaN;
-    land(k).X = Xs';
+    land_CMS(k).X = Xs';
     Ys = trace{k}(:, 2);
     Ys(end + 1) = NaN;
-    land(k).Y = Ys';
+    land_CMS(k).Y = Ys';
 end
 
 %u
@@ -113,8 +150,8 @@ mask_plot(~isnan(mask_plot)) = 0;
 mask_plot(isnan(mask_plot)) = 1;
 
 % Lon/lat vectors
-lat = latitudes_u_USCROMS(1, :)';
-lon = longitudes_u_USCROMS(:, 1);
+lat = latitudes_CMS(1, :)';
+lon = longitudes_CMS(:, 1);
 
 % Make the landmask
 trace = bwboundaries(mask_plot); 
@@ -124,15 +161,15 @@ for i = 1:length(trace)
 end
 
 % Create land polygons
-land_u = struct();
+land_u_CMS = struct();
 for k = 1:length(trace)
-    land_u(k).Geometry = 'Polygon';
+    land_u_CMS(k).Geometry = 'Polygon';
     Xs = trace{k}(:, 1); % Might have to subtract 360 at the end
     Xs(end + 1) = NaN;
-    land_u(k).X = Xs';
+    land_u_CMS(k).X = Xs';
     Ys = trace{k}(:, 2);
     Ys(end + 1) = NaN;
-    land_u(k).Y = Ys';
+    land_u_CMS(k).Y = Ys';
 end
 
 %v
@@ -143,8 +180,8 @@ mask_plot(~isnan(mask_plot)) = 0;
 mask_plot(isnan(mask_plot)) = 1;
 
 % Lon/lat vectors
-lat = latitudes_v_USCROMS(1, :)';
-lon = longitudes_v_USCROMS(:, 1);
+lat = latitudes_CMS(1, :)';
+lon = longitudes_CMS(:, 1);
 
 % Make the landmask
 trace = bwboundaries(mask_plot); 
@@ -154,15 +191,15 @@ for i = 1:length(trace)
 end
 
 % Create land polygons
-land_v = struct();
+land_v_CMS = struct();
 for k = 1:length(trace)
-    land_v(k).Geometry = 'Polygon';
+    land_v_CMS(k).Geometry = 'Polygon';
     Xs = trace{k}(:, 1); % Might have to subtract 360 at the end
     Xs(end + 1) = NaN;
-    land_v(k).X = Xs';
+    land_v_CMS(k).X = Xs';
     Ys = trace{k}(:, 2);
     Ys(end + 1) = NaN;
-    land_v(k).Y = Ys';
+    land_v_CMS(k).Y = Ys';
 end
 
 %% plot the u,v, and rho-grids separately, with all landmasks
@@ -172,18 +209,18 @@ figure;
 hold on;
 
 % Plot land mask for rho-grid
-for k = 1:length(land)
-    plot(land(k).X, land(k).Y, 'r'); % Red lines for the land mask for rho-grid
+for k = 1:length(land_CMS)
+    plot(land_CMS(k).X, land_CMS(k).Y, 'r'); % Red lines for the land mask for rho-grid
 end
 
 % Plot land mask for u-grid
-for k = 1:length(land_u)
-    plot(land_u(k).X, land_u(k).Y, 'b'); % Blue lines for the land mask for u-grid
+for k = 1:length(land_u_CMS)
+    plot(land_u_CMS(k).X, land_u_CMS(k).Y, 'b'); % Blue lines for the land mask for u-grid
 end
 
 % Plot land mask for v-grid
-for k = 1:length(land_v)
-    plot(land_v(k).X, land_v(k).Y, 'g'); % Green lines for the land mask for v-grid
+for k = 1:length(land_v_CMS)
+    plot(land_v_CMS(k).X, land_v_CMS(k).Y, 'g'); % Green lines for the land mask for v-grid
 end
 
 % % Plot every single USCROMS coordinate
@@ -206,7 +243,6 @@ daspect([1, 1, 1]);
 title('USCROMS Landmask');
 xlabel('Longitude');
 ylabel('Latitude');
-
 
 %% write to shapefile
 
@@ -239,7 +275,7 @@ prjText = ['GEOGCS["NAD83",', ...
     'AXIS["Longitude",EAST]]'];
 
 % Combine all into one array of structs
-land_all = [land(:); land_u(:); land_v(:)];
+land_all = [land_CMS(:); land_u_CMS(:); land_v_CMS(:)];
 
 % Write to a single shapefile
 shapewrite(land_all, fullfile(outputPath, 'landmask_merged.shp'));
@@ -322,20 +358,20 @@ title('Land Mask Dissolved');
 % end
 % 
 % % Create land polygons
-% land = struct();
+% land_USCROMS = struct();
 % for k = 1:length(trace)
-%     land(k).Geometry = 'Polygon';
+%     land_USCROMS(k).Geometry = 'Polygon';
 %     Xs = trace{k}(:, 1); % Might have to subtract 360 at the end
 %     Xs(end + 1) = NaN;
-%     land(k).X = Xs';
+%     land_USCROMS(k).X = Xs';
 %     Ys = trace{k}(:, 2);
 %     Ys(end + 1) = NaN;
-%     land(k).Y = Ys';
+%     land_USCROMS(k).Y = Ys';
 % end
 % 
 % %u
 % % Binary landmask contours
-% mask_plot = mask_u_CMS;
+% mask_plot = mask_u_USCROMS;
 % mask_plot(mask_plot == 0) = NaN;
 % mask_plot(~isnan(mask_plot)) = 0;
 % mask_plot(isnan(mask_plot)) = 1;
@@ -352,20 +388,20 @@ title('Land Mask Dissolved');
 % end
 % 
 % % Create land polygons
-% land_u = struct();
+% land_u_USCROMS = struct();
 % for k = 1:length(trace)
-%     land_u(k).Geometry = 'Polygon';
+%     land_u_USCROMS(k).Geometry = 'Polygon';
 %     Xs = trace{k}(:, 1); % Might have to subtract 360 at the end
 %     Xs(end + 1) = NaN;
-%     land_u(k).X = Xs';
+%     land_u_USCROMS(k).X = Xs';
 %     Ys = trace{k}(:, 2);
 %     Ys(end + 1) = NaN;
-%     land_u(k).Y = Ys';
+%     land_u_USCROMS(k).Y = Ys';
 % end
 % 
 % %v
 % % Binary landmask contours
-% mask_plot = mask_v_CMS;
+% mask_plot = mask_v_USCROMS;
 % mask_plot(mask_plot == 0) = NaN;
 % mask_plot(~isnan(mask_plot)) = 0;
 % mask_plot(isnan(mask_plot)) = 1;
@@ -382,15 +418,15 @@ title('Land Mask Dissolved');
 % end
 % 
 % % Create land polygons
-% land_v = struct();
+% land_v_USCROMS = struct();
 % for k = 1:length(trace)
-%     land_v(k).Geometry = 'Polygon';
+%     land_v_USCROMS(k).Geometry = 'Polygon';
 %     Xs = trace{k}(:, 1); % Might have to subtract 360 at the end
 %     Xs(end + 1) = NaN;
-%     land_v(k).X = Xs';
+%     land_v_USCROMS(k).X = Xs';
 %     Ys = trace{k}(:, 2);
 %     Ys(end + 1) = NaN;
-%     land_v(k).Y = Ys';
+%     land_v_USCROMS(k).Y = Ys';
 % end
 % 
 % %% plot the u,v, and rho-grids separately, with all landmasks
@@ -400,18 +436,18 @@ title('Land Mask Dissolved');
 % hold on;
 % 
 % % Plot land mask for rho-grid
-% for k = 1:length(land)
-%     plot(land(k).X, land(k).Y, 'r'); % Red lines for the land mask for rho-grid
+% for k = 1:length(land_USCROMS)
+%     plot(land_USCROMS(k).X, land_USCROMS(k).Y, 'r'); % Red lines for the land mask for rho-grid
 % end
 % 
 % % Plot land mask for u-grid
-% for k = 1:length(land_u)
-%     plot(land_u(k).X, land_u(k).Y, 'b'); % Blue lines for the land mask for u-grid
+% for k = 1:length(land_u_USCROMS)
+%     plot(land_u_USCROMS(k).X, land_u_USCROMS(k).Y, 'b'); % Blue lines for the land mask for u-grid
 % end
 % 
 % % Plot land mask for v-grid
-% for k = 1:length(land_v)
-%     plot(land_v(k).X, land_v(k).Y, 'g'); % Green lines for the land mask for v-grid
+% for k = 1:length(land_v_USCROMS)
+%     plot(land_v_USCROMS(k).X, land_v_USCROMS(k).Y, 'g'); % Green lines for the land mask for v-grid
 % end
 % 
 % % % Plot every single USCROMS coordinate
@@ -434,7 +470,6 @@ title('Land Mask Dissolved');
 % title('USCROMS Landmask');
 % xlabel('Longitude');
 % ylabel('Latitude');
-% 
 % 
 % %% write to shapefile
 % 
