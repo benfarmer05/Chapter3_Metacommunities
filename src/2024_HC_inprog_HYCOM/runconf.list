@@ -4,7 +4,7 @@ nnests               = 1
 timeMax              = 3456000         !in seconds- 40 days PLD
 timestep             = 3600            !in seconds- every hour
 outputFreq           = 10800           !in seconds- 3 hours
-releaseFilename      = "damsel_relfile_2004.txt"
+releaseFilename      = "damsel_relfile_2013.txt"
 !====================================================================!
 !Turbulence Module
 turb                 = .true.

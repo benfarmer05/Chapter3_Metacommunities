@@ -334,8 +334,56 @@ figure;
 mapshow(landmask_dissolved);
 title('Land Mask Dissolved');
 
+%% write shapefile for entire hydrodynamic extent
 
-% %% THE BELOW IS FOR USCROMS - not needed if just require CMS landmask
+% Assume longitudes_CMS and latitudes_CMS are 2D matrices
+lon = longitudes_CMS;
+lat = latitudes_CMS;
+
+% Get domain bounds
+minLon = min(lon(:));
+maxLon = max(lon(:));
+minLat = min(lat(:));
+maxLat = max(lat(:));
+
+% Create rectangular polygon coordinates
+X = [minLon, maxLon, maxLon, minLon, minLon];
+Y = [minLat, minLat, maxLat, maxLat, minLat];
+
+% Create shapefile structure
+domain_shape = struct( ...
+    'Geometry', 'Polygon', ...
+    'X', X, ...
+    'Y', Y, ...
+    'ID', 1); % Optional
+
+% Define .prj file contents for EPSG:4269 (NAD83)
+prjText = ['GEOGCS["NAD83",', ...
+    'DATUM["North_American_Datum_1983",', ...
+    'SPHEROID["GRS 1980",6378137,298.257222101]],', ...
+    'PRIMEM["Greenwich",0],', ...
+    'UNIT["degree",0.0174532925199433],', ...
+    'AXIS["Latitude",NORTH],', ...
+    'AXIS["Longitude",EAST]]'];
+
+% Write shapefile
+shapewrite(domain_shape, fullfile(outputPath, 'hydro_domain_extent.shp'));
+
+% Write .prj file
+fid = fopen(fullfile(outputPath, 'hydro_domain_extent.prj'), 'w');
+fwrite(fid, prjText);
+fclose(fid);
+
+% Read the shapefile
+hydro_domain_extent = shaperead(fullfile(outputPath, 'hydro_domain_extent.shp'));
+
+% Plot it
+figure;
+mapshow(hydro_domain_extent);
+title('Hydro Domain Extent');
+
+
+%% THE BELOW IS FOR USCROMS - not needed if just require CMS landmask
 % 
 % %% Construct the landmask polygons (boundaries) for USCROMS
 % 

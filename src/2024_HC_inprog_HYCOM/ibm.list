@@ -12,7 +12,7 @@
 	! Probability Matrix of Vertical Migration
 	ibio 			= .true.
 	ibioFilename	    	= "damsel_ovm.txt"
-	ibioTimeStep	    	= 1800	!in seconds
+	ibioTimeStep	    	= 3600	!in seconds
 	!==============================================================!
 	! Mortality Rate
 	mort			= .false.

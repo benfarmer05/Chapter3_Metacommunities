@@ -36,15 +36,21 @@ zlevels = [0.26 1 2 4 6 8 10 12 14 16 18 20 22 24 26 29 32 35 38 42 46 50 60 70 
 % approach with proper pathing, and also double-check how I created my
 % hydro files
 
-%randomly select a CMS-ready file
-files = dir(fullfile(tempPath, 'nest_1_*'));
+%randomly select a CMS-ready ROMS file
+files = dir(fullfile(tempPath, 'nest_1_2019*'));
 randomIndex = randi(length(files)); % generate a random index between 1 and the number of files
 baseFileName = files(randomIndex).name;
 ncdisp(fullfile(tempPath, baseFileName))  % Pass the full path to ncdisp
 
+%randomly select a CMS-ready HYCOM file
+files = dir(fullfile(tempPath, 'nest_1_2023*'));
+randomIndex = randi(length(files)); % generate a random index between 1 and the number of files
+baseFileName_HYCOM = files(randomIndex).name;
+ncdisp(fullfile(tempPath, baseFileName_HYCOM))  % Pass the full path to ncdisp
+
 %CMS coordinate systems
-longitudes_CMS = ncread(fullfile(tempPath, baseFileName), 'Longitude');
-latitudes_CMS = ncread(fullfile(tempPath, baseFileName), 'Latitude');
+longitudes_CMS = ncread(fullfile(tempPath, baseFileName_HYCOM), 'Longitude');
+latitudes_CMS = ncread(fullfile(tempPath, baseFileName_HYCOM), 'Latitude');
 
 % Create a grid of all longitude and latitude pairs
 [lat_grid, lon_grid] = meshgrid(latitudes_CMS, longitudes_CMS);

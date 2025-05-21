@@ -14,7 +14,7 @@
  tstart_yy = 2004
  tstart_mm = 1
  tstart_dd = 1
- tend_yy = 2004
+ tend_yy = 2023
  tend_mm = 12
  tend_dd = 31
  time_step = 86400 !seconds in one day
