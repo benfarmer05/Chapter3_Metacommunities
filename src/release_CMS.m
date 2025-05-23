@@ -1,7 +1,7 @@
 %% Script to create a release file for the Connectivity Modeling System
 %   simulating the dispersal and connectivity of SCTLD in the Virgin
 %   Islands & Puerto Rico
-%   17 May 2025
+%   22 May 2025
 
 clear;clc
 
@@ -37,7 +37,7 @@ outputPath = fullfile(projectPath, 'output');
 
 %parameters for start and end dates
 startDate = datetime(2019, 9, 1); % Example: Start date
-endDate = datetime(2019, 9, 30);  % Example: End date
+endDate = datetime(2019, 9, 7);  % Example: End date
 dateRange = startDate:endDate;
 
 %read in release points from GIS output and ensure they are sorted by
@@ -80,6 +80,34 @@ depths_CMS = ones(numpoints * num_releases, 1); %this will actually be reef dept
 particles_CMS = repmat(10, numpoints * num_releases, 1); %this could also vary by ID / time / location, etc.
 year_CMS = repmat(year(startDate), numpoints * num_releases, 1); %if more years are desired, should define and 'repmat' or similar above
 time_CMS = zeros(numpoints * num_releases, 1); %can choose to release at different times of day if desired
+
+
+
+%% TESTING
+
+% Create matrix for sorting: [Year, Month, Day, Time, ID, Longitude, Latitude, Depth, Particles]
+sortMatrix = [year_CMS, months_CMS, days_CMS, time_CMS, IDs_CMS, longitudes_CMS, latitudes_CMS, depths_CMS, particles_CMS];
+
+% Sort by Year, Month, Day, Time, then ID
+sortMatrix = sortrows(sortMatrix, [1, 2, 3, 4, 5]);
+
+% Extract sorted data
+year_CMS = sortMatrix(:, 1);
+months_CMS = sortMatrix(:, 2);
+days_CMS = sortMatrix(:, 3);
+time_CMS = sortMatrix(:, 4);
+IDs_CMS = sortMatrix(:, 5);
+longitudes_CMS = sortMatrix(:, 6);
+latitudes_CMS = sortMatrix(:, 7);
+depths_CMS = sortMatrix(:, 8);
+particles_CMS = sortMatrix(:, 9);
+
+
+%% TESTING
+
+
+
+
 
 
 % Create a cell array to store all data as strings with proper formatting

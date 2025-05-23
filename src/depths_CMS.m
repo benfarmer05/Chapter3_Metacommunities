@@ -36,11 +36,19 @@ zlevels = [0.26 1 2 4 6 8 10 12 14 16 18 20 22 24 26 29 32 35 38 42 46 50 60 70 
 % approach with proper pathing, and also double-check how I created my
 % hydro files
 
-%randomly select a CMS-ready ROMS file
-files = dir(fullfile(tempPath, 'nest_1_2019*'));
+%randomly select a CMS-ready ROMS file from the HPC
+% files = dir(fullfile(tempPath, 'nest_1_2019*'));
+files = dir(fullfile(tempPath, 'HPC*'));
 randomIndex = randi(length(files)); % generate a random index between 1 and the number of files
-baseFileName = files(randomIndex).name;
-ncdisp(fullfile(tempPath, baseFileName))  % Pass the full path to ncdisp
+baseFileName_CMS_HPC = files(randomIndex).name;
+ncdisp(fullfile(tempPath, baseFileName_CMS_HPC))  % Pass the full path to ncdisp
+
+%randomly select a CMS-ready ROMS file from my hard drive
+% files = dir(fullfile(tempPath, 'nest_1_2019*'));
+files = dir(fullfile(tempPath, 'drive*'));
+randomIndex = randi(length(files)); % generate a random index between 1 and the number of files
+baseFileName_CMS_drive = files(randomIndex).name;
+ncdisp(fullfile(tempPath, baseFileName_CMS_drive))  % Pass the full path to ncdisp
 
 %randomly select a CMS-ready HYCOM file
 files = dir(fullfile(tempPath, 'nest_1_2023*'));
@@ -61,13 +69,13 @@ lat_grid_indices = lat_grid(:);
 
 %CMS seafloor masks
 fill_value = single(1.2676506e+30);
-mask_u_seafloor = ncread(fullfile(tempPath, baseFileName), 'zu');
+mask_u_seafloor = ncread(fullfile(tempPath, baseFileName_CMS_HPC), 'zu');
 mask_u_seafloor(mask_u_seafloor==fill_value) = 0; %seafloor is 0's
 mask_u_seafloor(mask_u_seafloor ~= 0) = 1; %the ocean is 1's
-mask_v_seafloor = ncread(fullfile(tempPath, baseFileName), 'zv'); 
+mask_v_seafloor = ncread(fullfile(tempPath, baseFileName_CMS_HPC), 'zv'); 
 mask_v_seafloor(mask_v_seafloor==fill_value) = 0;
 mask_v_seafloor(mask_v_seafloor ~= 0) = 1;
-mask_rho_seafloor = ncread(fullfile(tempPath, baseFileName), 'zw'); 
+mask_rho_seafloor = ncread(fullfile(tempPath, baseFileName_CMS_HPC), 'zw'); 
 mask_rho_seafloor(mask_rho_seafloor==fill_value) = 0; 
 mask_rho_seafloor(mask_rho_seafloor ~= 0) = 1;
 
