@@ -71,6 +71,21 @@ mask_w_CMS(abs(mask_w_CMS) ~= 0) = 1; %the ocean is 1's, land is 0's
 mask_u_CMS(abs(mask_u_CMS) ~= 0) = 1; %the ocean is 1's, land is 0's
 mask_v_CMS(abs(mask_v_CMS) ~= 0) = 1; %the ocean is 1's, land is 0's
 
+% % CMS uses 9.9692e+36 as fill value for land points
+% fill_value = 9.9692e+36;
+% 
+% % Create masks: 1 = ocean (valid data), 0 = land (fill value)
+% mask_w_CMS = (wvel_CMS ~= fill_value);
+% mask_u_CMS = (uvel_CMS ~= fill_value);  
+% mask_v_CMS = (vvel_CMS ~= fill_value);
+% 
+% % Convert to double for safety
+% mask_w_CMS = double(mask_w_CMS);
+% mask_u_CMS = double(mask_u_CMS);
+% mask_v_CMS = double(mask_v_CMS);
+
+
+
 %% THE BELOW IS FOR CMS
 
 %% Construct the landmask polygons (boundaries)

@@ -42,8 +42,8 @@ endDate = datetime(2019, 12, 31);  % Example: End date
 %read in release points from GIS output and ensure they are sorted by
 % their unique ID
 relpoints = readmatrix(fullfile(dataPath, 'points_650_none-on-land.csv'));
-relpoints = relpoints(:, 10:12);
-relpoints = sortrows(relpoints, 1);
+% relpoints = relpoints(:, 10:12); %for QGIS
+% relpoints = sortrows(relpoints, 1); %for QGIS
 
 IDs = relpoints(:,1);
 longitudes = relpoints(:,2) + 360;
