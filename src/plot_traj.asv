@@ -119,9 +119,7 @@ hold off;
 
 %% Map exit codes -2 (red) - pre-allocated for speed
 
-% STOPPING POINT - 27 SEP 2025
-%   - did the -1 codes actually leave the model area or did they just
-%   disappear at strange areas? should check
+% STOPPING POINT - 27 SEP 
 
 % Count -2 exit codes first for pre-allocation
 num_neg2 = sum([bigstruct.exitcode] == -2);

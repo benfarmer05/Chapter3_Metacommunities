@@ -1,0 +1,263 @@
+clear;clc
+
+%% Initialize paths
+projectPath = matlab.project.rootProject().RootFolder;
+tempPath = fullfile(projectPath, 'temp');
+outputPath = fullfile(projectPath, 'output');
+
+% %% OPTION 1: Direct random sampling from files (FIXED)
+% trajlist = dir(fullfile(tempPath,'traj*.nc'));
+% fprintf('Found %d trajectory files\n', length(trajlist));
+% 
+% if isempty(trajlist)
+%     error('No trajectory files found in %s', tempPath);
+% end
+% 
+% % Quick metadata scan to understand data structure
+% sample_file = fullfile(tempPath, trajlist(1).name);
+% try
+%     sample_location = ncread(sample_file, 'location');
+%     sample_lon = ncread(sample_file, 'lon');
+%     fprintf('Sample file structure: %d locations, %dx%d lon matrix\n', ...
+%         length(sample_location), size(sample_lon,1), size(sample_lon,2));
+% catch ME
+%     error('Cannot read sample file %s: %s', sample_file, ME.message);
+% end
+% 
+% % Smart sampling parameters
+% target_trajectories = 200; % Fixed reasonable number for testing
+% fprintf('Target trajectories to plot: %d\n', target_trajectories);
+% 
+% % Random seed
+% seed = randi(10000);
+% rng(seed);
+% fprintf('Using random seed: %d\n', seed);
+% 
+% % Pre-allocate trajectory storage for efficiency
+% selected_data = struct('lon', cell(target_trajectories, 1), 'lat', cell(target_trajectories, 1));
+% trajectories_collected = 0;
+% 
+% % Calculate how many files to sample (at least 25% of files, up to all)
+% files_to_sample = max(ceil(length(trajlist) * 0.25), min(10, length(trajlist)));
+% selected_file_indices = randsample(length(trajlist), files_to_sample, false);
+% 
+% fprintf('Sampling from %d files...\n', files_to_sample);
+% 
+% tic;
+% for i = 1:length(selected_file_indices)
+%     if trajectories_collected >= target_trajectories
+%         break;
+%     end
+% 
+%     file_idx = selected_file_indices(i);
+%     filename = fullfile(tempPath, trajlist(file_idx).name);
+% 
+%     fprintf('Processing file %d/%d: %s\n', i, length(selected_file_indices), trajlist(file_idx).name);
+% 
+%     try
+%         % Read file data
+%         location = ncread(filename, 'location');
+%         lon = ncread(filename, 'lon');
+%         lat = ncread(filename, 'lat');
+% 
+%         fprintf('  File contains %d location entries\n', length(location));
+% 
+%         % Get unique locations in this file
+%         unique_locs = unique(location);
+%         fprintf('  Unique locations: %d\n', length(unique_locs));
+% 
+%         % Calculate how many trajectories to take from this file
+%         remaining_needed = target_trajectories - trajectories_collected;
+%         remaining_files = length(selected_file_indices) - i + 1;
+%         trajectories_from_this_file = min(length(unique_locs), ...
+%             ceil(remaining_needed / remaining_files));
+% 
+%         fprintf('  Taking %d trajectories from this file\n', trajectories_from_this_file);
+% 
+%         if trajectories_from_this_file > 0
+%             % Randomly select locations from this file
+%             if length(unique_locs) <= trajectories_from_this_file
+%                 sampled_locs = unique_locs;
+%             else
+%                 sampled_locs = randsample(unique_locs, trajectories_from_this_file, false);
+%             end
+% 
+%             % Extract data for each selected location
+%             for j = 1:length(sampled_locs)
+%                 if trajectories_collected >= target_trajectories
+%                     break;
+%                 end
+% 
+%                 loc = sampled_locs(j);
+%                 loc_indices = find(location == loc);
+% 
+%                 if ~isempty(loc_indices)
+%                     % Take all particles for this location (or sample if too many)
+%                     if length(loc_indices) > 10 % Limit particles per location for visualization
+%                         loc_indices = randsample(loc_indices, 10, false);
+%                     end
+% 
+%                     for k = 1:length(loc_indices)
+%                         trajectories_collected = trajectories_collected + 1;
+%                         idx = loc_indices(k);
+%                         selected_data(trajectories_collected).lon = lon(:, idx);
+%                         selected_data(trajectories_collected).lat = lat(:, idx);
+%                     end
+%                 end
+%             end
+%         end
+% 
+%     catch ME
+%         warning('Error reading file %s: %s', filename, ME.message);
+%         continue;
+%     end
+% end
+% 
+% load_time = toc;
+% 
+% % Trim unused pre-allocated entries
+% if trajectories_collected < target_trajectories
+%     selected_data = selected_data(1:trajectories_collected);
+% end
+% 
+% fprintf('\nSuccessfully loaded %d trajectories in %.2f seconds\n', trajectories_collected, load_time);
+% 
+% if trajectories_collected == 0
+%     error('No trajectories were successfully loaded. Check your data files.');
+% end
+% 
+% %% Plot the sampled data
+% fprintf('Creating plot...\n');
+% figure('Position', [100 100 800 600]);
+% 
+% % Load and plot landmask
+% try
+%     landmask = shaperead(fullfile(outputPath, 'landmask_dissolved.shp'));
+%     mapshow(landmask);
+%     fprintf('Landmask loaded successfully\n');
+% catch ME
+%     warning('ME:LandmaskError', 'Could not load landmask: %s', ME.message);
+% end
+% 
+% hold on;
+% 
+% % Plot trajectories
+% tic;
+% colors = lines(min(10, trajectories_collected)); % Use different colors for first 10
+% for i = 1:trajectories_collected
+%     color_idx = mod(i-1, size(colors,1)) + 1;
+%     plot(selected_data(i).lon, selected_data(i).lat, 'Color', colors(color_idx,:), 'LineWidth', 0.5);
+% end
+% plot_time = toc;
+% 
+% % Finalize plot
+% axis equal; 
+% try
+%     axis([294, 296, 17.6, 19.2]); % Your specified bounds
+% catch
+%     fprintf('Using automatic axis bounds\n');
+% end
+% 
+% title(sprintf('%d trajectories (seed:%d, load:%.1fs, plot:%.2fs)', ...
+%     trajectories_collected, seed, load_time, plot_time));
+% 
+% fprintf('Plotting completed in %.2f seconds\n', plot_time);
+% fprintf('Total time: %.2f seconds\n', load_time + plot_time);
+% 
+% % Show some statistics
+% if trajectories_collected > 0
+%     all_lons = [selected_data.lon];
+%     all_lats = [selected_data.lat];
+%     fprintf('\nTrajectory bounds:\n');
+%     fprintf('  Longitude: %.3f to %.3f\n', min(all_lons(:)), max(all_lons(:)));
+%     fprintf('  Latitude: %.3f to %.3f\n', min(all_lats(:)), max(all_lats(:)));
+% end
+% 
+% 
+% 
+% 
+% %% really really efficient
+% 
+% 
+% clear;clc
+% 
+% %% Setup paths
+% projectPath = matlab.project.rootProject().RootFolder;
+% tempPath = fullfile(projectPath, 'temp');
+% outputPath = fullfile(projectPath, 'output');
+% 
+% %% Load trajectory data efficiently
+% trajlist = dir(fullfile(tempPath,'traj*.nc'));
+% target_trajectories = 200;
+% rng(randi(10000));
+% 
+% % Pre-allocate
+% selected_data = struct('lon', cell(target_trajectories, 1), 'lat', cell(target_trajectories, 1));
+% trajectories_collected = 0;
+% 
+% % Sample from random files
+% selected_files = randsample(length(trajlist), min(10, length(trajlist)), false);
+% 
+% for i = selected_files'
+%     if trajectories_collected >= target_trajectories, break; end
+% 
+%     filename = fullfile(tempPath, trajlist(i).name);
+%     try
+%         location = ncread(filename, 'location');
+%         lon = ncread(filename, 'lon');
+%         lat = ncread(filename, 'lat');
+% 
+%         unique_locs = unique(location);
+%         n_take = min(length(unique_locs), target_trajectories - trajectories_collected);
+%         sampled_locs = randsample(unique_locs, n_take, false);
+% 
+%         for loc = sampled_locs'
+%             if trajectories_collected >= target_trajectories, break; end
+%             loc_idx = find(location == loc, 1);
+%             trajectories_collected = trajectories_collected + 1;
+%             selected_data(trajectories_collected).lon = lon(:, loc_idx);
+%             selected_data(trajectories_collected).lat = lat(:, loc_idx);
+%         end
+%     catch
+%         continue;
+%     end
+% end
+% 
+% % Trim unused entries
+% selected_data = selected_data(1:trajectories_collected);
+
+%% Plot trajectories with starting location stars
+figure('Position', [100 100 800 600]);
+
+% Load landmask
+try
+    mapshow(shaperead(fullfile(outputPath, 'landmask_dissolved.shp')));
+catch
+end
+hold on;
+
+% Plot trajectories and collect start points
+colors = lines(10);
+start_lons = zeros(trajectories_collected, 1);
+start_lats = zeros(trajectories_collected, 1);
+
+for i = 1:trajectories_collected
+    % Plot trajectory
+    plot(selected_data(i).lon, selected_data(i).lat, 'Color', colors(mod(i-1,10)+1,:), 'LineWidth', 0.5);
+    
+    % Store starting position
+    valid_idx = find(~isnan(selected_data(i).lon) & ~isnan(selected_data(i).lat), 1);
+    if ~isempty(valid_idx)
+        start_lons(i) = selected_data(i).lon(valid_idx);
+        start_lats(i) = selected_data(i).lat(valid_idx);
+    end
+end
+
+% Plot starting locations as red stars
+valid_starts = ~isnan(start_lons);
+plot(start_lons(valid_starts), start_lats(valid_starts), 'r*', 'MarkerSize', 8, 'LineWidth', 1.5);
+
+axis equal; axis([294, 296, 17.6, 19.2]);
+title(sprintf('%d trajectories with start points', trajectories_collected));
+
+fprintf('Plotted %d trajectories\n', trajectories_collected);
