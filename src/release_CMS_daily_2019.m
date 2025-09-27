@@ -37,7 +37,8 @@ outputPath = fullfile(projectPath, 'output');
 
 %parameters for start and end dates
 startDate = datetime(2019, 1, 1); % Example: Start date
-endDate = datetime(2019, 12, 31);  % Example: End date
+% endDate = datetime(2019, 12, 31);  % Example: End date
+endDate = datetime(2019, 1, 3);  % Example: End date
 
 %read in release points from GIS output and ensure they are sorted by
 % their unique ID

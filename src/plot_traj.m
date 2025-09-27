@@ -1,3 +1,6 @@
+
+clear;clc
+
 %% HOW I WANT TO TALK TO THE DATA
 % Get the project root directory
 projectPath = matlab.project.rootProject().RootFolder;
@@ -7,7 +10,7 @@ outputPath = fullfile(projectPath, 'output'); % or wherever your shapefile is lo
 
 %% SECTION THAT NEEDS TO BE UPDATED FOR THE ABOVE
 %%Convert netcdf data to structure
-trajlist = dir(fullfile(tempPath,'traj*'));
+trajlist = dir(fullfile(tempPath,'traj*.nc'));
 % Initialize the structure
 bigstruct_0 = struct();
 
@@ -20,9 +23,13 @@ end
 
 % Loop over the range of NetCDF files
 for i = 1:length(trajlist)
-    % Construct the filename with full path using dynamic format
-    filename = fullfile(tempPath, sprintf(['traj_file_' format_str '.nc'], i));
+
+    % % Construct the filename with full path using dynamic format
+    % filename = fullfile(tempPath, sprintf(['traj_file_' format_str '.nc'], i));
     
+    % Get the full filename from the directory listing
+    filename = fullfile(tempPath, trajlist(i).name);
+
     % Check if the file exists
     if isfile(filename)
         % Read the variables from the NetCDF file
@@ -102,6 +109,62 @@ axis equal
 axis([294, 296, 17.6, 19.2]) % Adjusted to match the coordinate system shown in your images
 title(sprintf('Trajectory Data with Landmask (Every %dth release location)', skip_particles));
 hold off;
+
+
+
+
+
+
+
+%% 
+
+%% Map exit codes -2 (red) - pre-allocated for speed
+% Count -2 exit codes first for pre-allocation
+num_neg2 = sum([bigstruct.exitcode] == -2);
+particles_per_release = size(bigstruct(1).lon, 2);
+total_neg2_particles = num_neg2 * particles_per_release;
+lon_neg2 = NaN(total_neg2_particles, 1);
+lat_neg2 = NaN(total_neg2_particles, 1);
+idx = 1;
+for i = 1:length(bigstruct)
+if bigstruct(i).exitcode == -2
+ first_lon = bigstruct(i).lon(1, :);
+ first_lat = bigstruct(i).lat(1, :);
+ n = length(first_lon);
+ lon_neg2(idx:idx+n-1) = first_lon(:);
+ lat_neg2(idx:idx+n-1) = first_lat(:);
+ idx = idx + n;
+end
+end
+% Remove unused pre-allocated space
+lon_neg2 = lon_neg2(~isnan(lon_neg2));
+lat_neg2 = lat_neg2(~isnan(lat_neg2));
+
+% Keep only unique lat/lon combinations
+coords = [lon_neg2, lat_neg2];
+[unique_coords, ~, ~] = unique(coords, 'rows');
+lon_neg2_unique = unique_coords(:, 1);
+lat_neg2_unique = unique_coords(:, 2);
+
+% Plot with numbers
+figure; hold on;
+mapshow(landmask);
+scatter(lon_neg2_unique, lat_neg2_unique, 10, 'r', 'filled');
+for i = 1:length(lon_neg2_unique)
+ text(lon_neg2_unique(i), lat_neg2_unique(i), num2str(i), 'FontSize', 8, 'Color', 'white');
+end
+axis equal; axis([294, 296, 17.6, 19.2]);
+title('Exit Code -2 Locations (Unique)');
+fprintf('Total particles with exit code -2: %d\n', length(lon_neg2));
+fprintf('Unique locations plotted: %d\n', length(lon_neg2_unique));
+
+%%
+
+
+
+
+
+
 
 
 %% Figure colored by release month
