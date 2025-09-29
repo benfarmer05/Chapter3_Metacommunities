@@ -144,18 +144,18 @@ fileNumbers = cellfun(@(x) sscanf(x, 'croco_his.%05d.nc'), {files.name}); %extra
 files = files(sortedIndices);
 
 t = 0; %start at day 0 - if you are testing a simulation NOT starting on January 1st, 2019 at midnight, edit this
-% dummy stuff to test contents of loop:
-myDir = pwd;
-i=1;j=1;
-% files = dir(fullfile(myDir,'croco_his.03741.nc')); %create an index for every netcdf file in directory
-% j = 3;
-% dummy stuff to test contents of loop
-% for i = 1:length(files) %loop through each file
+% % dummy stuff to test contents of loop:
+% myDir = pwd;
+% i=1;j=1;
+% % files = dir(fullfile(myDir,'croco_his.03741.nc')); %create an index for every netcdf file in directory
+% % j = 3;
+% % dummy stuff to test contents of loop
+for i = 1:length(files) %loop through each file
     baseFileName = files(i).name; %name of the file itself
     fullFileName = fullfile(myDir, baseFileName); %path to the file name
     fprintf(1, 'Now reading %s\n', fullFileName);
     
-    % for j = 1:3 %loop through each hour in each file. there are three hours per file
+    for j = 1:3 %loop through each hour in each file. there are three hours per file
         
         % This tracks how far along the script is and monitors
          % output. if any files are missing in theenvironment, it will not
@@ -258,7 +258,7 @@ i=1;j=1;
         % 
         %     continue %jump to the next iteration of j-loop
         % end
-
+        
         %convert to single format rather than double, lowers precision but
         % halves file size. CMS is okay with singles. may want to return to
         % this
@@ -319,7 +319,7 @@ i=1;j=1;
         ncwriteatt(cms_fname, 'zs', 'units', 'PSU')
         ncwriteatt(cms_fname, 'zs', 'valid_range', salt_range) %% NOTE: not sure if this is necessary / if I'm doing it correctly      
         ncwriteatt(cms_fname, 'zs', 'long_name', 'salinity')
-%     end
-% end
+    end
+end
 
 toc

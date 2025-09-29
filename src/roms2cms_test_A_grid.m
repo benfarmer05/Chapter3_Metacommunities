@@ -1,10 +1,10 @@
 %%
 % 1.) make sure the w-velocity interpolation isn't going haywire. CHECK
 % 2.) fix the "valid range" issues. CHECK
-% 3.) create a release file. SHIT
-% 4.) test this bad boy out on the CMS
-% 5.) maybe increase depth range down to 300 m?
-% 6.) does netcdf even work anymore?? figure out by trying a job, etc.
+% 3.) create a release file. CHECK
+% 4.) test this bad boy out on the CMS. CHECK
+% 5.) maybe increase depth range down to 300 m? NO
+% 6.) does netcdf even work anymore?? figure out by trying a job, etc. CHECK
 
 clear;clc
 

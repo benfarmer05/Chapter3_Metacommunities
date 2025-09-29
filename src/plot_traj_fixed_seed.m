@@ -8,7 +8,7 @@ outputPath = fullfile(projectPath, 'output');
 %% =================================================================
 %% SEED CONFIGURATION
 %% =================================================================
-USE_FIXED_SEED = true;  % Set to true to use fixed seed, false for random
+USE_FIXED_SEED = false;  % Set to true to use fixed seed, false for random
 FIXED_SEED = 5648;      % Change this to your desired seed value
 
 if USE_FIXED_SEED
@@ -224,4 +224,68 @@ if trajectories_collected > 0
     end
 else
     fprintf('No trajectories loaded for analysis\n');
+end
+
+
+
+%% =================================================================
+%% RELEASE DATE SUMMARY ANALYSIS
+%% =================================================================
+
+fprintf('\n=== Analyzing particle release dates ===\n');
+
+% Pre-allocate for all release dates
+all_release_dates = [];
+estimated_total_particles = trajectories_collected * 10; % rough estimate
+all_release_dates = NaN(estimated_total_particles, 1);
+date_count = 0;
+
+% Collect release dates from sampled files
+for file_idx = selected_files'
+    filename = fullfile(tempPath, trajlist(file_idx).name);
+    
+    try
+        release_dates = ncread(filename, 'releasedate');
+        num_dates = length(release_dates);
+        
+        % Expand array if needed
+        if date_count + num_dates > length(all_release_dates)
+            all_release_dates = [all_release_dates; NaN(num_dates * 2, 1)];
+        end
+        
+        % Store dates
+        all_release_dates(date_count + 1 : date_count + num_dates) = release_dates;
+        date_count = date_count + num_dates;
+        
+    catch ME
+        warning('Could not read release dates from %s: %s', trajlist(file_idx).name, ME.message);
+    end
+end
+
+% Trim to actual size
+all_release_dates = all_release_dates(1:date_count);
+
+if ~isempty(all_release_dates)
+    % Get unique dates and their range
+    unique_dates = unique(all_release_dates);
+    min_julian = min(unique_dates);
+    max_julian = max(unique_dates);
+    
+    % Convert Julian dates to readable format
+    min_matlab_date = min_julian - 1721058.5;
+    max_matlab_date = max_julian - 1721058.5;
+    
+    fprintf('Release date analysis (%d particles from %d files):\n', date_count, length(selected_files));
+    fprintf('  Julian date range: %.0f to %.0f\n', min_julian, max_julian);
+    fprintf('  Calendar dates: %s to %s\n', datestr(min_matlab_date, 'mmm dd, yyyy'), datestr(max_matlab_date, 'mmm dd, yyyy'));
+    fprintf('  Number of unique release dates: %d\n', length(unique_dates));
+    
+    if length(unique_dates) == 1
+        fprintf('  *** All particles released on the same date ***\n');
+    else
+        duration_days = max_matlab_date - min_matlab_date;
+        fprintf('  Release period duration: %.1f days\n', duration_days);
+    end
+else
+    fprintf('No release date information found\n');
 end

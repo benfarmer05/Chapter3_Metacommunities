@@ -19,114 +19,115 @@ numlevels = length(zlevels);
 
 %% interpolate u,v,w,t,s at discrete depths on each of their respective grids
 
-%
-figure();imagescn(lon_u',lat_u',udepths(:,:,3)');cb = colorbar; ylabel(cb,'depth (m)');cmocean deep;axis equal; %clim([-.6 .6]);
-figure();imagescn(lon_u',lat_u',udepths(:,:,10)');cb = colorbar; ylabel(cb,'depth (m)');cmocean deep;axis equal; %clim([-.6 .6]);
-figure();imagescn(lon_u',lat_u',udepths(:,:,72)');cb = colorbar; ylabel(cb,'depth (m)');cmocean deep;axis equal; %clim([-.6 .6]);
-%
-
-%
-plot3(lon_rho, lat_rho, -h);zlim([-100 0])
-h(isnan(h))
-h(h==0)
-h(h<0)
-h(h>0)
-min(min(h))
-max(max(h))
-h(h==10)
-%
-
-%
-figure(2);imagescn(lon_u',lat_u',u(:,:,1)');cb = colorbar; ylabel(cb,'depth (m)');cmocean deep;axis equal; clim([-.6 .6]);
-figure(2);imagescn(lon_u',lat_u',u(:,:,10)');cb = colorbar; ylabel(cb,'depth (m)');cmocean deep;axis equal; clim([-.6 .6]);
-figure(3);imagescn(lon_u',lat_u',u(:,:,72)');cb = colorbar; ylabel(cb,'depth (m)');cmocean deep;axis equal; clim([-.6 .6]);
-%
-
-%
-x = 0:pi/4:2*pi; 
-v = sin(x);
-xq = 0:pi/16:2*pi;
-
-figure
-vq1 = interp1(x,v,xq);
-plot(x,v,'o',xq,vq1,':.');
-xlim([0 2*pi]);
-title('(Default) Linear Interpolation');
-%
-
-
-variable = u;
-variabledepths = udepths;
-for i = 1:1 %200
-    dims = size(variabledepths); %dims = size(udepths);rhodepths
-
-    % %option to limit random draws to shallow STT/STJ reefy area of domain
-    % row = randi([100 350]); %these are grid rows (oriented in latitudinal direction)
-    % col = randi([300 500]); %these are grid columns (oriented in longitudinal direction)
-
-    %option to draw over entire domain
-    row = randi([1 dims(1)]); %these are grid rows (oriented in latitudinal direction)
-    col = randi([1 dims(2)]); %these are grid columns (oriented in longitudinal direction)
-
-    % row = 189;
-    % col = 124;
-
-    zlevelsloop = zlevels;
-    zlevelsloop(1) = 0;
-
-    x = abs(squeeze(variabledepths(row,col,:))); %the known depths. x = abs(squeeze(udepths(row,col,:)));rhodepths
-    v = squeeze(variable(row,col,:)); %the known values of interest (current speed, temp, salinity) at those depths. v = squeeze(t(row,col,:));
-    xq = single(zlevelsloop); %the depths I want to interpolate to
-
-    lonnies = single(lon_rho(row,col));
-    latties = single(lat_rho(row,col));
-
-    if ~isnan(v(1))
-        vq1 = interp1(x,v,xq, 'linear'); %the interpolated values of interest
-        vq2 = interp1(x,v,xq, 'spline');
-        vq3 = makima(x,v,xq);
-    end
-
-    %is this silly when we could simply cut the interpolation at the max of
-    %the bathymetry at that lat/lon? I don't think so, because the
-    %interpolation works best with layers of identical length.
-    for k = 1:length(zlevelsloop)
-        if zlevelsloop(k) > h(row,col)
-            vq1(k) = NaN;
-            vq2(k) = NaN;
-            vq3(k) = NaN;
-        end
-    end  
-
-    % % figure(1);plot(x,v,'o',xq,vq1,':.');xlabel('Depth (m)');ylabel('Temperature (C)');title('Linear');%xlim([0 20])
-    % % % figure(2);plot(x,v,'o',xq,vq2,':.');xlabel('Depth (m)');ylabel('Temperature (C)');xlim([0 250])
-    % % % figure(2);plot(x,v,'o',xq,vq3,':.');xlabel('Depth (m)');ylabel('Temperature (C)');title('Akima')%;xlim([0 250])
-    % figure();plot(v, x, 'o', vq1, xq, ':.');xlabel('w-velocity (m/s)');ylabel('Depth (m)');title('Linear');set(gca, 'YDir', 'reverse'); % Reverse the y-axis direction
-    % % figure(2);plot(x,v,'o',xq,vq2,':.');xlabel('Depth (m)');ylabel('w-velocity (m/s)');xlim([0 250])
-    % % figure(2);plot(x,v,'o',xq,vq3,':.');xlabel('Depth (m)');ylabel('w-velocity (m/s)');title('Akima')%;xlim([0 250])
-
-    figure();
-    plot(v, x, 'o', vq1, xq, ':.');
-    xlabel('w-velocity (m/s)');
-    ylabel('Depth (m)');
-    title('Linear');
-    set(gca, 'YDir', 'reverse'); % Reverse the y-axis direction
-
-    % Set xlim and ylim based on the range of v and x
-    xlim([min(vq1) max(vq1)]);
-    ylim([min(xq) max(xq)]);
-
-    % % figure(3);imagescn(lon_rho',lat_rho',t(:,:,1)');cb = colorbar; ylabel(cb,'Temperature (C)');cmocean thermal;axis equal; hold on %clim([-.6 .6]);
-    % figure(3);imagescn(lon_rho',lat_rho',variable(:,:,1)');cb = colorbar; ylabel(cb,'w-velocity (m/s)');cmocean balance;axis equal; hold on %clim([-.6 .6]);
-    % plot(lonnies,latties,'rp','MarkerSize',15,'MarkerFaceColor','r')
-    % % figure(1);plot3(lon_rho, lat_rho, -h); hold on
-    % % plot3(lonnies,latties,-10,'rp','MarkerSize',15,'MarkerFaceColor','r')
-
-    h(row,col)
-    yart = udepths(:,:,72);
-    yart(row,col)
-
-end
+% % %testing
+% %
+% figure();imagescn(lon_u',lat_u',udepths(:,:,3)');cb = colorbar; ylabel(cb,'depth (m)');cmocean deep;axis equal; %clim([-.6 .6]);
+% figure();imagescn(lon_u',lat_u',udepths(:,:,10)');cb = colorbar; ylabel(cb,'depth (m)');cmocean deep;axis equal; %clim([-.6 .6]);
+% figure();imagescn(lon_u',lat_u',udepths(:,:,72)');cb = colorbar; ylabel(cb,'depth (m)');cmocean deep;axis equal; %clim([-.6 .6]);
+% %
+% 
+% %
+% plot3(lon_rho, lat_rho, -h);zlim([-100 0])
+% h(isnan(h))
+% h(h==0)
+% h(h<0)
+% h(h>0)
+% min(min(h))
+% max(max(h))
+% h(h==10)
+% %
+% 
+% %
+% figure(2);imagescn(lon_u',lat_u',u(:,:,1)');cb = colorbar; ylabel(cb,'depth (m)');cmocean deep;axis equal; clim([-.6 .6]);
+% figure(2);imagescn(lon_u',lat_u',u(:,:,10)');cb = colorbar; ylabel(cb,'depth (m)');cmocean deep;axis equal; clim([-.6 .6]);
+% figure(3);imagescn(lon_u',lat_u',u(:,:,72)');cb = colorbar; ylabel(cb,'depth (m)');cmocean deep;axis equal; clim([-.6 .6]);
+% %
+% 
+% %
+% x = 0:pi/4:2*pi; 
+% v = sin(x);
+% xq = 0:pi/16:2*pi;
+% 
+% figure
+% vq1 = interp1(x,v,xq);
+% plot(x,v,'o',xq,vq1,':.');
+% xlim([0 2*pi]);
+% title('(Default) Linear Interpolation');
+% %
+% 
+% 
+% variable = u;
+% variabledepths = udepths;
+% for i = 1:1 %200
+%     dims = size(variabledepths); %dims = size(udepths);rhodepths
+% 
+%     % %option to limit random draws to shallow STT/STJ reefy area of domain
+%     % row = randi([100 350]); %these are grid rows (oriented in latitudinal direction)
+%     % col = randi([300 500]); %these are grid columns (oriented in longitudinal direction)
+% 
+%     %option to draw over entire domain
+%     row = randi([1 dims(1)]); %these are grid rows (oriented in latitudinal direction)
+%     col = randi([1 dims(2)]); %these are grid columns (oriented in longitudinal direction)
+% 
+%     % row = 189;
+%     % col = 124;
+% 
+%     zlevelsloop = zlevels;
+%     zlevelsloop(1) = 0;
+% 
+%     x = abs(squeeze(variabledepths(row,col,:))); %the known depths. x = abs(squeeze(udepths(row,col,:)));rhodepths
+%     v = squeeze(variable(row,col,:)); %the known values of interest (current speed, temp, salinity) at those depths. v = squeeze(t(row,col,:));
+%     xq = single(zlevelsloop); %the depths I want to interpolate to
+% 
+%     lonnies = single(lon_rho(row,col));
+%     latties = single(lat_rho(row,col));
+% 
+%     if ~isnan(v(1))
+%         vq1 = interp1(x,v,xq, 'linear'); %the interpolated values of interest
+%         vq2 = interp1(x,v,xq, 'spline');
+%         vq3 = makima(x,v,xq);
+%     end
+% 
+%     %is this silly when we could simply cut the interpolation at the max of
+%     %the bathymetry at that lat/lon? I don't think so, because the
+%     %interpolation works best with layers of identical length.
+%     for k = 1:length(zlevelsloop)
+%         if zlevelsloop(k) > h(row,col)
+%             vq1(k) = NaN;
+%             vq2(k) = NaN;
+%             vq3(k) = NaN;
+%         end
+%     end  
+% 
+%     % % figure(1);plot(x,v,'o',xq,vq1,':.');xlabel('Depth (m)');ylabel('Temperature (C)');title('Linear');%xlim([0 20])
+%     % % % figure(2);plot(x,v,'o',xq,vq2,':.');xlabel('Depth (m)');ylabel('Temperature (C)');xlim([0 250])
+%     % % % figure(2);plot(x,v,'o',xq,vq3,':.');xlabel('Depth (m)');ylabel('Temperature (C)');title('Akima')%;xlim([0 250])
+%     % figure();plot(v, x, 'o', vq1, xq, ':.');xlabel('w-velocity (m/s)');ylabel('Depth (m)');title('Linear');set(gca, 'YDir', 'reverse'); % Reverse the y-axis direction
+%     % % figure(2);plot(x,v,'o',xq,vq2,':.');xlabel('Depth (m)');ylabel('w-velocity (m/s)');xlim([0 250])
+%     % % figure(2);plot(x,v,'o',xq,vq3,':.');xlabel('Depth (m)');ylabel('w-velocity (m/s)');title('Akima')%;xlim([0 250])
+% 
+%     figure();
+%     plot(v, x, 'o', vq1, xq, ':.');
+%     xlabel('w-velocity (m/s)');
+%     ylabel('Depth (m)');
+%     title('Linear');
+%     set(gca, 'YDir', 'reverse'); % Reverse the y-axis direction
+% 
+%     % Set xlim and ylim based on the range of v and x
+%     xlim([min(vq1) max(vq1)]);
+%     ylim([min(xq) max(xq)]);
+% 
+%     % % figure(3);imagescn(lon_rho',lat_rho',t(:,:,1)');cb = colorbar; ylabel(cb,'Temperature (C)');cmocean thermal;axis equal; hold on %clim([-.6 .6]);
+%     % figure(3);imagescn(lon_rho',lat_rho',variable(:,:,1)');cb = colorbar; ylabel(cb,'w-velocity (m/s)');cmocean balance;axis equal; hold on %clim([-.6 .6]);
+%     % plot(lonnies,latties,'rp','MarkerSize',15,'MarkerFaceColor','r')
+%     % % figure(1);plot3(lon_rho, lat_rho, -h); hold on
+%     % % plot3(lonnies,latties,-10,'rp','MarkerSize',15,'MarkerFaceColor','r')
+% 
+%     h(row,col)
+%     yart = udepths(:,:,72);
+%     yart(row,col)
+% 
+% end
 
 %%
 %u
@@ -398,26 +399,26 @@ end
 %% regrid u,v to the rho dimensions (w/t/s variables are already set up this way). so, converting from Arakawa C-grid to Arakawa A-grid
 % this is bicubic interpolation by default
 
-% %what was used to produce the CMS-ready test May 2024
-% u_Agrid = zeros(size(rhodepths,1), size(rhodepths,2), numlevels);
-% v_Agrid = zeros(size(rhodepths,1), size(rhodepths,2), numlevels);
-% 
-% for i = 1:numlevels
-%     u_Agrid(:,:,i) = nanimresize(u_new(:,:,i), [size(rhodepths,1), size(rhodepths,2)]); %interpolate u_new to make it 536x716 (rho grid)
-%     v_Agrid(:,:,i) = nanimresize(v_new(:,:,i), [size(rhodepths,1), size(rhodepths,2)]);
-% end
-% 
-% u_new = u_Agrid;
-% v_new = v_Agrid;
+%what was used to produce the CMS-ready test May 2024
+u_Agrid = zeros(size(rhodepths,1), size(rhodepths,2), numlevels);
+v_Agrid = zeros(size(rhodepths,1), size(rhodepths,2), numlevels);
 
-% TEST for cutting off edges - 7 June 2024
-% u_test = u_new(:,:,1);
-% u_test2 = u_test(:, 1:end-1);
-% 
-% v_test = v_new(:,:,1);
-% v_test2 = v_test(1:end-1, :);
-u_new = u_new(:, 1:end-1, :);
-v_new = v_new(:, 1:end-1, :);
+for i = 1:numlevels
+    u_Agrid(:,:,i) = nanimresize(u_new(:,:,i), [size(rhodepths,1), size(rhodepths,2)]); %interpolate u_new to make it 536x716 (rho grid)
+    v_Agrid(:,:,i) = nanimresize(v_new(:,:,i), [size(rhodepths,1), size(rhodepths,2)]);
+end
+
+u_new = u_Agrid;
+v_new = v_Agrid;
+
+% % TEST for cutting off edges - 7 June 2024
+% % u_test = u_new(:,:,1);
+% % u_test2 = u_test(:, 1:end-1);
+% % 
+% % v_test = v_new(:,:,1);
+% % v_test2 = v_test(1:end-1, :);
+% u_new = u_new(:, 1:end-1, :);
+% v_new = v_new(:, 1:end-1, :);
 
 % %was TESTING this on 4 June 2024 - may be a better option
 % % for i = 1:numlevels
