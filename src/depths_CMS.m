@@ -7,7 +7,7 @@
 %   settle on the most useful depth - the CMS likely interpolates the
 %   "seafloor" using its available grid system, so I probably want to
 %   use some kind of interpolation scheme. still testing that out
-% 17 May 2025
+% 17 Oct 2025
 
 %% Conservative depth assignment checking all three masks
 
