@@ -7,7 +7,7 @@
 %   settle on the most useful depth - the CMS likely interpolates the
 %   "seafloor" using its available grid system, so I probably want to
 %   use some kind of interpolation scheme. still testing that out
-% 17 Oct 2025
+% 19 Oct 2025
 
 %% Conservative depth assignment checking all three masks
 
@@ -42,7 +42,8 @@ mask_zw = (zw ~= fill_value);
 zlevels = [0.26 1 2 4 6 8 10 12 14 16 18 20 22 24 26 29 32 35 38 42 46 50 60 70 85 100 120 140 160 190 220 250]';
 
 % Load release points
-relpoints = readmatrix(fullfile(dataPath, 'points_650_none-on-land.csv'));
+% relpoints = readmatrix(fullfile(dataPath, 'points_650_none-on-land.csv'));
+relpoints = readmatrix(fullfile(dataPath, 'centroids_vertices_FINALFORCMS.csv'));
 lon_release = relpoints(:,2) + 360;
 lat_release = relpoints(:,3);
 
