@@ -6,24 +6,90 @@ tempPath = fullfile(projectPath, 'temp');
 outputPath = fullfile(projectPath, 'output');
 
 %% =================================================================
-%% EFFICIENT VERSION with TRUE randomness
+%% EFFICIENT VERSION with NA percentage monitoring
 %% =================================================================
-    
+
 trajlist = dir(fullfile(tempPath,'traj*.nc'));
+
+%% Check NA percentages across all files
+fprintf('\n=== Checking NA percentages in trajectory files ===\n');
+fprintf('This helps determine simulation completion status\n\n');
+
+% Sample files to check (check all if < 50 files, otherwise sample)
+files_to_check = min(length(trajlist), 50);
+if length(trajlist) > 50
+    check_indices = round(linspace(1, length(trajlist), files_to_check));
+else
+    check_indices = 1:length(trajlist);
+end
+
+% Initialize tracking
+na_stats = struct();
+
+for i = 1:length(check_indices)
+    file_idx = check_indices(i);
+    filename = fullfile(tempPath, trajlist(file_idx).name);
+    
+    fprintf('File %d/%d: %s\n', i, length(check_indices), trajlist(file_idx).name);
+    
+    try
+        % Get file info
+        file_info = ncinfo(filename);
+        
+        % Check each variable
+        for j = 1:length(file_info.Variables)
+            var_name = file_info.Variables(j).Name;
+            
+            try
+                var_data = ncread(filename, var_name);
+                
+                % Calculate NA percentage
+                if isnumeric(var_data)
+                    total_elements = numel(var_data);
+                    na_elements = sum(isnan(var_data(:)));
+                    na_percent = (na_elements / total_elements) * 100;
+                    
+                    % Store in structure (accumulate across files)
+                    if ~isfield(na_stats, var_name)
+                        na_stats.(var_name) = [];
+                    end
+                    na_stats.(var_name)(end+1) = na_percent;
+                    
+                    fprintf('  %s: %.1f%% NA (%d/%d elements)\n', ...
+                        var_name, na_percent, na_elements, total_elements);
+                end
+            catch
+                fprintf('  %s: Could not read\n', var_name);
+            end
+        end
+        fprintf('\n');
+        
+    catch ME
+        fprintf('  Error reading file: %s\n\n', ME.message);
+    end
+end
+
+%% Summary statistics
+fprintf('=== SUMMARY: Average NA percentages across checked files ===\n');
+var_names = fieldnames(na_stats);
+for i = 1:length(var_names)
+    avg_na = mean(na_stats.(var_names{i}));
+    min_na = min(na_stats.(var_names{i}));
+    max_na = max(na_stats.(var_names{i}));
+    fprintf('%s: %.1f%% avg (range: %.1f%% - %.1f%%)\n', ...
+        var_names{i}, avg_na, min_na, max_na);
+end
+fprintf('\n');
+
+%% Plot trajectories
 target_trajectories = 200;
-
-% TRUE random seed based on current time
-rng('shuffle');  % Initialize with current time
-seed = randi(10000);  % Now this will be truly random
-rng(seed);  % Set the seed (optional: for reproducibility if you save the seed)
-
-fprintf('Using random seed: %d\n', seed);
+rng(randi(10000));
 
 % Pre-allocate
 selected_data = struct('lon', cell(target_trajectories, 1), 'lat', cell(target_trajectories, 1));
 trajectories_collected = 0;
 
-% Sample from random files (now truly random)
+% Sample from random files
 selected_files = randsample(length(trajlist), min(10, length(trajlist)), false);
 
 for i = selected_files'
@@ -105,83 +171,14 @@ end
 
 axis equal; axis([294, 296, 17.6, 19.2]);
 
-% Create title with trajectory duration and seed
+% Create title with trajectory duration
 if trajectory_duration_days >= 1
-    title(sprintf('%d trajectories (seed:%d, %.1f days)', trajectories_collected, seed, trajectory_duration_days));
+    title(sprintf('%d trajectories with start points (%.1f days)', trajectories_collected, trajectory_duration_days));
 else
-    title(sprintf('%d trajectories (seed:%d, %.1f hours)', trajectories_collected, seed, trajectory_duration_hours));
+    title(sprintf('%d trajectories with start points (%.1f hours)', trajectories_collected, trajectory_duration_hours));
 end
 
 fprintf('Plotted %d trajectories\n', trajectories_collected);
 if trajectory_duration_hours > 0
     fprintf('Trajectory duration: %.1f hours (%.1f days)\n', trajectory_duration_hours, trajectory_duration_days);
 end
-
-
-
-
-
-
-% %% version just plotting locations
-% 
-% 
-% clear;clc
-% 
-% %% Initialize paths
-% projectPath = matlab.project.rootProject().RootFolder;
-% tempPath = fullfile(projectPath, 'temp');
-% outputPath = fullfile(projectPath, 'output');
-% 
-% %% =================================================================
-% %% Plot all unique locations (no trajectories)
-% %% =================================================================
-% 
-% trajlist = dir(fullfile(tempPath,'traj*.nc'));
-% 
-% % Collect all unique starting locations
-% all_start_lons = [];
-% all_start_lats = [];
-% 
-% fprintf('Reading trajectory files...\n');
-% 
-% for i = 1:length(trajlist)
-%     filename = fullfile(tempPath, trajlist(i).name);
-%     try
-%         location = ncread(filename, 'location');
-%         lon = ncread(filename, 'lon');
-%         lat = ncread(filename, 'lat');
-% 
-%         unique_locs = unique(location);
-% 
-%         % Get starting position for each unique location
-%         for loc = unique_locs'
-%             loc_idx = find(location == loc, 1);
-%             valid_idx = find(~isnan(lon(:, loc_idx)) & ~isnan(lat(:, loc_idx)), 1);
-%             if ~isempty(valid_idx)
-%                 all_start_lons(end+1) = lon(valid_idx, loc_idx);
-%                 all_start_lats(end+1) = lat(valid_idx, loc_idx);
-%             end
-%         end
-%     catch
-%         continue;
-%     end
-% end
-% 
-% %% Plot unique locations only
-% figure('Position', [100 100 800 600]);
-% 
-% % Load landmask
-% try
-%     mapshow(shaperead(fullfile(outputPath, 'landmask_dissolved.shp')));
-% catch
-% end
-% hold on;
-% 
-% % Plot all starting locations as red stars
-% plot(all_start_lons, all_start_lats, 'r*', 'MarkerSize', 8, 'LineWidth', 1.5);
-% 
-% axis equal; axis([294, 296, 17.6, 19.2]);
-% 
-% title(sprintf('%d unique trajectory starting locations', length(all_start_lons)));
-% 
-% fprintf('Plotted %d unique starting locations\n', length(all_start_lons));
