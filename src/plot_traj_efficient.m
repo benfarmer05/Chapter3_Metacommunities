@@ -185,3 +185,110 @@ end
 % title(sprintf('%d unique trajectory starting locations', length(all_start_lons)));
 % 
 % fprintf('Plotted %d unique starting locations\n', length(all_start_lons));
+
+
+
+
+
+% %% check traj files to make totally certain their IDs are good
+% 
+% %% Simple Trajectory to Polygon Check - Multiple Locations
+% clear; clc;
+% 
+% %% Load data
+% projectPath = matlab.project.rootProject().RootFolder;
+% dataPath = fullfile(projectPath, 'data');
+% tempPath = fullfile('D:\Dissertation\CMS_traj', 'Q1_2019');
+% 
+% % Load polygons
+% centroids = readmatrix(fullfile(dataPath, 'centroids_vertices_FINALFORCMS.csv'));
+% unique_IDs = centroids(:,1);
+% Xs = [centroids(:,8) centroids(:,10) centroids(:,12) centroids(:,14) centroids(:,8)];
+% Ys = [centroids(:,9) centroids(:,11) centroids(:,13) centroids(:,15) centroids(:,9)];
+% 
+% % Load release file
+% releasefile = readmatrix(fullfile(tempPath, 'ReleaseFile_USVI_2019_Q1.txt'));
+% release_IDs = releasefile(:,1);
+% 
+% %% Get random trajectory file
+% trajlist = dir(fullfile(tempPath, 'traj*.nc'));
+% rand_file_idx = randi(length(trajlist));
+% filename = fullfile(tempPath, trajlist(rand_file_idx).name);
+% 
+% fprintf('Selected file: %s\n', trajlist(rand_file_idx).name);
+% 
+% %% Read trajectory data
+% location = ncread(filename, 'location');  % Zero-based line numbers
+% lon = ncread(filename, 'lon');
+% lat = ncread(filename, 'lat');
+% 
+% % Convert lon if needed
+% if min(lon(:)) > 180
+%     lon = lon - 360;
+% end
+% 
+% %% Get unique locations in this file
+% unique_locations = unique(location);
+% n_unique = length(unique_locations);
+% fprintf('Found %d unique locations in this file\n', n_unique);
+% fprintf('Location values range: %d to %d\n', min(unique_locations), max(unique_locations));
+% fprintf('Release file has %d entries (indices 1 to %d)\n', length(release_IDs), length(release_IDs));
+% 
+% %% Check a few random ones (pick 5)
+% n_check = min(5, n_unique);
+% check_locs = unique_locations(randperm(n_unique, n_check));
+% 
+% figure('Position', [100 100 1400 900]);
+% 
+% for i = 1:n_check
+%     subplot(2, 3, i);
+%     hold on;
+% 
+%     loc_zero = check_locs(i);
+%     fprintf('\n--- Checking location %d (zero-based) ---\n', loc_zero);
+% 
+%     % CRITICAL: Check if this is zero-based or one-based
+%     % If location values start at 0, add 1 for MATLAB indexing
+%     % If location values start at 1, use as-is
+%     if min(unique_locations) == 0
+%         loc_one = loc_zero + 1;  % Zero-based, add 1
+%         fprintf('  Converting to one-based: %d\n', loc_one);
+%     else
+%         loc_one = loc_zero;  % Already one-based
+%         fprintf('  Already one-based: %d\n', loc_one);
+%     end
+% 
+%     % Get reef ID from release file
+%     reef_id = release_IDs(loc_one);
+%     fprintf('  Reef ID from release file line %d: %d\n', loc_one, reef_id);
+% 
+%     % Find polygon
+%     poly_idx = find(unique_IDs == reef_id);
+%     poly_x = Xs(poly_idx, :);
+%     poly_y = Ys(poly_idx, :);
+% 
+%     % Get particles from this location
+%     mask = location == loc_zero;
+%     loc_lon = lon(:, mask);
+%     loc_lat = lat(:, mask);
+% 
+%     % Plot polygon
+%     plot(poly_x, poly_y, 'r-', 'LineWidth', 2);
+% 
+%     % Plot trajectories
+%     plot(loc_lon, loc_lat, 'b-', 'LineWidth', 0.5);
+% 
+%     % Mark start points
+%     start_lon = loc_lon(1, :);
+%     start_lat = loc_lat(1, :);
+%     plot(start_lon, start_lat, 'r*', 'MarkerSize', 8);
+% 
+%     % Check if inside
+%     inside = inpolygon(start_lon, start_lat, poly_x, poly_y);
+% 
+%     axis equal tight;
+%     grid on;
+%     title(sprintf('ID %d: %d/%d inside', reef_id, sum(inside), length(inside)));
+% end
+% 
+% sgtitle(sprintf('File: %s', trajlist(rand_file_idx).name), 'Interpreter', 'none');
