@@ -1627,3 +1627,553 @@ else
     
     fprintf('  Flattened %d positions from %d sources\n', total_positions, length(event_data));
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+%% ========== STANDALONE CONNECTIVITY ANALYSIS ==========
+% This script analyzes preprocessed event files one at a time
+% Press Ctrl+C at any time to cancel (except during parallel processing)
+clear; clc;
+
+%% Configuration
+YEAR = 2019;
+QUARTER = 1;
+EVENT_TO_ANALYZE = 1;  % Set to specific event number, or 'random', or 'all'
+
+fprintf('=== REEF CONNECTIVITY ANALYSIS ===\n');
+
+%% Setup paths
+projectPath = matlab.project.rootProject().RootFolder;
+dataPath = fullfile(projectPath, 'data');
+outputPath = fullfile('D:\Dissertation\CMS_traj\output');
+quarter_name = sprintf('Q%d_%d', QUARTER, YEAR);
+preprocessPath = fullfile(outputPath, 'CMS_traj', quarter_name);
+
+%% Load reef geometry data
+centroids = readmatrix(fullfile(dataPath, 'centroids_vertices_FINALFORCMS.csv'));
+unique_IDs = centroids(:,1);
+Xs = [centroids(:,8) centroids(:,10) centroids(:,12) centroids(:,14) centroids(:,8)];
+Ys = [centroids(:,9) centroids(:,11) centroids(:,13) centroids(:,15) centroids(:,9)];
+n_locations = size(centroids,1);
+fprintf('Loaded %d reef polygons.\n', n_locations);
+
+%% Pre-compute polygon bounding boxes for optimization
+fprintf('Pre-computing polygon bounding boxes...\n');
+bbox_xmin = min(Xs(:,1:4), [], 2);
+bbox_xmax = max(Xs(:,1:4), [], 2);
+bbox_ymin = min(Ys(:,1:4), [], 2);
+bbox_ymax = max(Ys(:,1:4), [], 2);
+
+%% Load metadata and get event files
+metadata_file = fullfile(preprocessPath, 'metadata.mat');
+if ~exist(metadata_file, 'file')
+    error('Metadata file not found. Run preprocessing first (DO_PREPROCESSING = true).');
+end
+
+load(metadata_file, 'metadata');
+event_files = dir(fullfile(preprocessPath, 'event_*.mat'));
+n_events = length(event_files);
+
+if n_events == 0
+    error('No event files found in %s', preprocessPath);
+end
+
+fprintf('Found %d preprocessed events\n', n_events);
+
+%% Sort event files by actual chronological date
+fprintf('Sorting events chronologically...\n');
+event_dates = zeros(n_events, 1);
+for i = 1:n_events
+    temp = load(fullfile(preprocessPath, event_files(i).name), 'event_metadata');
+    event_dates(i) = temp.event_metadata.target_date;
+end
+[~, sort_idx] = sort(event_dates);
+event_files = event_files(sort_idx);
+fprintf('Events sorted by release date.\n');
+
+%% Determine which event(s) to analyze
+if ischar(EVENT_TO_ANALYZE) && strcmpi(EVENT_TO_ANALYZE, 'random')
+    events_to_process = randi(n_events);
+    fprintf('Randomly selected event %d\n', events_to_process);
+elseif ischar(EVENT_TO_ANALYZE) && strcmpi(EVENT_TO_ANALYZE, 'all')
+    events_to_process = 1:n_events;
+    fprintf('Will process all %d events\n', n_events);
+else
+    events_to_process = EVENT_TO_ANALYZE;
+    if events_to_process > n_events
+        error('Requested event %d but only %d events available', events_to_process, n_events);
+    end
+end
+
+%% Check parallel pool
+pool = gcp('nocreate');
+if isempty(pool)
+    fprintf('Starting parallel pool...\n');
+    pool = parpool('local');
+else
+    fprintf('Using existing parallel pool with %d workers.\n', pool.NumWorkers);
+end
+
+%% Check for INPOLY2 availability
+use_inpoly = false;
+if exist('inpoly2', 'file') == 2
+    try
+        test_result = inpoly2([0 0], [0 0; 1 0; 1 1; 0 1]);
+        use_inpoly = true;
+        fprintf('INPOLY2 detected - using fast algorithm.\n');
+    catch
+        fprintf('INPOLY2 found but missing helpers. Using standard inpolygon.\n');
+    end
+else
+    fprintf('INPOLY2 not found - using standard inpolygon.\n');
+end
+
+%% Process each event
+for event_num = events_to_process
+    fprintf('\n========================================\n');
+    fprintf('PROCESSING EVENT %d/%d\n', event_num, n_events);
+    fprintf('========================================\n');
+    fprintf('Press Ctrl+C to cancel\n');
+    drawnow;  % Allow MATLAB to process interrupts
+    
+    %% Load event data
+    event_filename = fullfile(preprocessPath, event_files(event_num).name);
+    
+    % Check file size and give user a chance to cancel
+    file_info = dir(event_filename);
+    file_size_gb = file_info.bytes / 1e9;
+    fprintf('Loading: %s (%.1f GB)\n', event_files(event_num).name, file_size_gb);
+    fprintf('This may take 30-60 seconds... Press Ctrl+C NOW to cancel.\n');
+    pause(5);  % Give user 5 seconds to cancel before loading
+    drawnow;
+    
+    fprintf('Loading data...\n');
+    tic;
+    load(event_filename, 'event_data', 'event_metadata');
+    fprintf('Loaded in %.1f seconds\n', toc);
+    
+    calendar_date = event_metadata.calendar_date;
+    fprintf('Date: %s\n', datestr(calendar_date, 'dd-mmm-yyyy HH:MM:SS'));
+    fprintf('Sources: %d | Particles: %d | Timesteps: %d\n', ...
+        event_metadata.n_sources, event_metadata.n_particles_total, event_metadata.n_timesteps);
+    
+    %% Flatten event data for connectivity analysis
+    fprintf('\nFlattening particle trajectories...\n');
+    total_positions = event_metadata.n_particles_total * event_metadata.n_timesteps;
+    all_lon = zeros(total_positions, 1);
+    all_lat = zeros(total_positions, 1);
+    all_source_idx = zeros(total_positions, 1);
+    
+    pos_idx = 1;
+    for s = 1:length(event_data)
+        n_pos = numel(event_data(s).lon);
+        all_lon(pos_idx:pos_idx+n_pos-1) = event_data(s).lon(:);
+        all_lat(pos_idx:pos_idx+n_pos-1) = event_data(s).lat(:);
+        all_source_idx(pos_idx:pos_idx+n_pos-1) = event_data(s).source_reef_idx;
+        pos_idx = pos_idx + n_pos;
+    end
+    
+    fprintf('Flattened %d total positions\n', total_positions);
+    drawnow;  % Allow cancellation checkpoint
+    
+    %% Filter valid positions
+    valid = ~isnan(all_lon) & ~isnan(all_lat) & all_source_idx > 0;
+    lon_all = all_lon(valid);
+    lat_all = all_lat(valid);
+    source_all = all_source_idx(valid);
+    
+    fprintf('Valid positions after filtering: %d\n', numel(lon_all));
+    drawnow;  % Allow cancellation checkpoint
+    
+    if isempty(lon_all)
+        warning('No valid positions found for this event. Skipping.');
+        continue;
+    end
+    
+    %% Parallel connectivity computation
+    fprintf('\nComputing connectivity matrix...\n');
+    tic;
+    
+    % Process in chunks for memory management
+    chunk_size = 50000;
+    n_chunks = ceil(numel(lon_all) / chunk_size);
+    chunk_connections = cell(n_chunks, 1);
+    
+    % Copy variables for parfor
+    Xs_par = Xs;
+    Ys_par = Ys;
+    bbox_xmin_par = bbox_xmin;
+    bbox_xmax_par = bbox_xmax;
+    bbox_ymin_par = bbox_ymin;
+    bbox_ymax_par = bbox_ymax;
+    n_locations_par = n_locations;
+    use_inpoly_par = use_inpoly;
+    
+    fprintf('Processing %d chunks in parallel...\n', n_chunks);
+    fprintf('Note: Parallel processing cannot be interrupted - wait for completion.\n');
+    drawnow;  % Allow cancellation before starting parallel work
+    
+    parfor chunk = 1:n_chunks
+        % Get chunk data
+        idx_start = (chunk-1)*chunk_size + 1;
+        idx_end = min(chunk*chunk_size, numel(lon_all));
+        
+        lon_chunk = lon_all(idx_start:idx_end);
+        lat_chunk = lat_all(idx_start:idx_end);
+        src_chunk = source_all(idx_start:idx_end);
+        
+        n_pts = numel(lon_chunk);
+        dest_chunk = zeros(n_pts, 1);
+        
+        % Test each polygon with bounding box pre-filtering
+        for j = 1:n_locations_par
+            % Fast bounding box check
+            in_bbox = lon_chunk >= bbox_xmin_par(j) & lon_chunk <= bbox_xmax_par(j) & ...
+                      lat_chunk >= bbox_ymin_par(j) & lat_chunk <= bbox_ymax_par(j);
+            
+            if ~any(in_bbox)
+                continue;
+            end
+            
+            candidates = find(in_bbox);
+            
+            if use_inpoly_par
+                in_poly = inpoly2([lon_chunk(candidates), lat_chunk(candidates)], ...
+                                 [Xs_par(j,1:4)', Ys_par(j,1:4)']);
+            else
+                in_poly = inpolygon(lon_chunk(candidates), lat_chunk(candidates), ...
+                                   Xs_par(j,:), Ys_par(j,:));
+            end
+            
+            dest_chunk(candidates(in_poly)) = j;
+        end
+        
+        % Store connections
+        valid_conn = dest_chunk > 0;
+        chunk_connections{chunk} = [src_chunk(valid_conn), dest_chunk(valid_conn)];
+    end
+    
+    %% Aggregate results into connectivity matrix
+    fprintf('Aggregating connectivity matrix...\n');
+    drawnow;  % Allow cancellation checkpoint
+    ConnMatrix = zeros(n_locations, n_locations);
+    
+    for chunk = 1:n_chunks
+        connections = chunk_connections{chunk};
+        for i = 1:size(connections, 1)
+            ConnMatrix(connections(i,1), connections(i,2)) = ...
+                ConnMatrix(connections(i,1), connections(i,2)) + 1;
+        end
+    end
+    
+    elapsed = toc;
+    fprintf('Connectivity computed in %.1f seconds\n', elapsed);
+    drawnow;  % Allow cancellation checkpoint
+    
+    %% Normalize connectivity matrix
+    fprintf('Normalizing connectivity matrix...\n');
+    ConnMatrix_raw = ConnMatrix;
+    
+    row_sums = sum(ConnMatrix, 2);
+    row_sums(row_sums == 0) = 1;
+    ConnMatrix_normalized = ConnMatrix ./ row_sums;
+    
+    %% Generate results and statistics
+    fprintf('\n=== CONNECTIVITY RESULTS ===\n');
+    fprintf('Raw connections: %d\n', nnz(ConnMatrix_raw));
+    
+    [src_indices, dst_indices] = find(ConnMatrix_raw);
+    active_sources = unique(src_indices);
+    active_dests = unique(dst_indices);
+    
+    fprintf('Active sources: %d\n', numel(active_sources));
+    fprintf('Active destinations: %d\n', numel(active_dests));
+    fprintf('Self-recruitment events: %d\n', sum(diag(ConnMatrix_raw)));
+    
+    % Network metrics
+    out_degree = sum(ConnMatrix_raw, 2);
+    in_degree = sum(ConnMatrix_raw, 1)';
+    total_connectivity = out_degree + in_degree;
+    
+    fprintf('\nTop 5 most connected locations:\n');
+    [~, sorted_idx] = sort(total_connectivity, 'descend');
+    for i = 1:min(5, nnz(total_connectivity))
+        idx = sorted_idx(i);
+        fprintf('  Reef %d (ID=%d): Out=%d, In=%d, Total=%d\n', ...
+            idx, unique_IDs(idx), out_degree(idx), in_degree(idx), ...
+            total_connectivity(idx));
+    end
+    
+    %% Save results
+    results_file = fullfile(preprocessPath, sprintf('connectivity_%s.mat', ...
+                            datestr(calendar_date, 'yyyy_mmmdd_HHMMSS')));
+    
+    connectivity_results = struct();
+    connectivity_results.ConnMatrix_raw = ConnMatrix_raw;
+    connectivity_results.ConnMatrix_normalized = ConnMatrix_normalized;
+    connectivity_results.event_metadata = event_metadata;
+    connectivity_results.analysis_date = datetime('now');
+    connectivity_results.processing_time_sec = elapsed;
+    connectivity_results.out_degree = out_degree;
+    connectivity_results.in_degree = in_degree;
+    connectivity_results.total_connectivity = total_connectivity;
+    
+    save(results_file, 'connectivity_results', '-v7.3');
+    fprintf('\nResults saved: %s\n', results_file);
+    
+    %% Generate visualizations
+    fprintf('Generating visualizations...\n');
+    drawnow;  % Allow cancellation checkpoint
+    
+    active_locs = unique([active_sources; active_dests]);
+    centroids_x = mean(Xs(:,1:4), 2);
+    centroids_y = mean(Ys(:,1:4), 2);
+    
+    % Figure 1: Normalized connectivity heatmap
+    fig1 = figure('Position', [100 100 800 600]);
+    sub_conn = ConnMatrix_normalized(active_locs, active_locs);
+    imagesc(sub_conn);
+    colorbar;
+    caxis([0 1]);
+    xlabel('Destination Reef');
+    ylabel('Source Reef');
+    title(sprintf('Normalized Connectivity - %s', datestr(calendar_date, 'dd-mmm-yyyy')));
+    axis square;
+    
+    % Figure 2: Raw counts heatmap (log scale)
+    fig2 = figure('Position', [920 100 800 600]);
+    sub_conn_raw = ConnMatrix_raw(active_locs, active_locs);
+    imagesc(log10(sub_conn_raw + 1));
+    colorbar;
+    xlabel('Destination Reef');
+    ylabel('Source Reef');
+    title(sprintf('Raw Connectivity (log10) - %s', datestr(calendar_date, 'dd-mmm-yyyy')));
+    axis square;
+    
+    % Figure 3: Spatial connectivity map (raw counts)
+    fig3 = figure('Position', [100 750 1000 800]);
+    hold on;
+    
+    for i = 1:numel(active_locs)
+        idx = active_locs(i);
+        plot(Xs(idx,:), Ys(idx,:), 'Color', [0.7 0.7 0.7], 'LineWidth', 1);
+    end
+    
+    conn_size = total_connectivity(active_locs);
+    conn_size = conn_size / max(conn_size) * 200 + 20;
+    
+    scatter(centroids_x(active_locs), centroids_y(active_locs), ...
+        conn_size, total_connectivity(active_locs), 'filled', ...
+        'MarkerEdgeColor', 'k', 'LineWidth', 1.5);
+    
+    colorbar;
+    xlabel('Longitude');
+    ylabel('Latitude');
+    title(sprintf('Reef Connectivity - %s', datestr(calendar_date, 'dd-mmm-yyyy')));
+    axis equal tight;
+    grid on;
+    
+    % Save figures
+    saveas(fig1, fullfile(preprocessPath, sprintf('conn_normalized_%s.png', ...
+                          datestr(calendar_date, 'yyyy_mmmdd_HHMMSS'))));
+    saveas(fig2, fullfile(preprocessPath, sprintf('conn_raw_%s.png', ...
+                          datestr(calendar_date, 'yyyy_mmmdd_HHMMSS'))));
+    saveas(fig3, fullfile(preprocessPath, sprintf('conn_spatial_%s.png', ...
+                          datestr(calendar_date, 'yyyy_mmmdd_HHMMSS'))));
+    
+    close(fig1); close(fig2); close(fig3);
+    
+    fprintf('Figures saved.\n');
+    
+    %% Clear large variables from memory before next event
+    fprintf('Clearing memory...\n');
+    clear event_data event_metadata all_lon all_lat all_source_idx
+    clear lon_all lat_all source_all chunk_connections ConnMatrix ConnMatrix_raw ConnMatrix_normalized
+    clear connectivity_results sub_conn sub_conn_raw conn_size
+    
+    % Force garbage collection
+    java.lang.System.gc();
+    
+    fprintf('Memory cleared.\n');
+end
+
+fprintf('\n=== ANALYSIS COMPLETE ===\n');
+fprintf('Processed %d event(s)\n', length(events_to_process));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+% %% DIAGNOSE .MAT FILE LOADING PERFORMANCE
+% % Run this to check if your load times are normal
+% clear; clc;
+% 
+% %% Configuration
+% YEAR = 2019;
+% QUARTER = 1;
+% EVENT_TO_TEST = 1;  % Which event file to test
+% 
+% %% Setup paths
+% projectPath = matlab.project.rootProject().RootFolder;
+% outputPath = fullfile('D:\Dissertation\CMS_traj\output');
+% quarter_name = sprintf('Q%d_%d', QUARTER, YEAR);
+% preprocessPath = fullfile(outputPath, 'CMS_traj', quarter_name);
+% 
+% %% Get event files
+% event_files = dir(fullfile(preprocessPath, 'event_*.mat'));
+% if isempty(event_files)
+%     error('No event files found in %s', preprocessPath);
+% end
+% 
+% % Sort chronologically
+% event_dates = zeros(length(event_files), 1);
+% for i = 1:length(event_files)
+%     temp = load(fullfile(preprocessPath, event_files(i).name), 'event_metadata');
+%     event_dates(i) = temp.event_metadata.target_date;
+% end
+% [~, sort_idx] = sort(event_dates);
+% event_files = event_files(sort_idx);
+% 
+% %% Select file to test
+% test_file = fullfile(preprocessPath, event_files(EVENT_TO_TEST).name);
+% file_info = dir(test_file);
+% 
+% fprintf('=== LOAD SPEED DIAGNOSTICS ===\n');
+% fprintf('File: %s\n', event_files(EVENT_TO_TEST).name);
+% fprintf('Size: %.2f GB\n', file_info.bytes / 1e9);
+% fprintf('Path: %s\n', test_file);
+% 
+% %% Check 1: Disk location type
+% drive_letter = test_file(1);
+% fprintf('\n--- Disk Information ---\n');
+% fprintf('Drive: %s:\\\n', drive_letter);
+% 
+% % Try to determine if it's SSD, HDD, or network
+% if ispc
+%     try
+%         [~, drive_info] = system(sprintf('wmic logicaldisk where "DeviceID=''%s:''" get Description', drive_letter));
+%         fprintf('Type: %s\n', strtrim(drive_info));
+%     catch
+%         fprintf('Type: Unable to determine\n');
+%     end
+% end
+% 
+% %% Check 2: Inspect file without loading (using matfile)
+% fprintf('\n--- File Structure Analysis ---\n');
+% fprintf('Inspecting file structure (fast)...\n');
+% tic;
+% m = matfile(test_file);
+% fprintf('matfile() access: %.2f seconds\n', toc);
+% 
+% % Get variable info
+% vars = whos(m);
+% fprintf('\nVariables in file:\n');
+% for i = 1:length(vars)
+%     fprintf('  %s: %s, %.2f MB\n', vars(i).name, ...
+%             mat2str(vars(i).size), vars(i).bytes / 1e6);
+% end
+% 
+% %% Check 3: Load just metadata (small, should be fast)
+% fprintf('\n--- Partial Load Test ---\n');
+% fprintf('Loading just metadata...\n');
+% tic;
+% meta = load(test_file, 'event_metadata');
+% t_meta = toc;
+% fprintf('Metadata only: %.2f seconds\n', t_meta);
+% 
+% if t_meta > 5
+%     fprintf('WARNING: Even metadata took >5 seconds. Disk I/O may be slow.\n');
+% else
+%     fprintf('Metadata load is fast - full load slowness is likely due to data size.\n');
+% end
+% 
+% %% Check 4: Full load test
+% fprintf('\n--- Full Load Test ---\n');
+% fprintf('Loading complete file (this is what your script does)...\n');
+% fprintf('Starting full load...\n');
+% 
+% tic;
+% data = load(test_file);
+% t_full = toc;
+% 
+% fprintf('Full load time: %.1f seconds (%.1f minutes)\n', t_full, t_full/60);
+% 
+% %% Calculate expected vs actual speed
+% expected_mb_per_sec = 100;  % Typical HDD speed
+% expected_time = (file_info.bytes / 1e6) / expected_mb_per_sec;
+% actual_mb_per_sec = (file_info.bytes / 1e6) / t_full;
+% 
+% fprintf('\n--- Performance Analysis ---\n');
+% fprintf('Actual speed: %.1f MB/s\n', actual_mb_per_sec);
+% fprintf('Expected for HDD: ~%d MB/s\n', expected_mb_per_sec);
+% fprintf('Expected for SSD: ~500 MB/s\n');
+% 
+% if actual_mb_per_sec < 50
+%     fprintf('\n⚠️  WARNING: Load speed is SLOW (< 50 MB/s)\n');
+%     fprintf('Possible causes:\n');
+%     fprintf('  - Network drive or USB drive\n');
+%     fprintf('  - Disk fragmentation\n');
+%     fprintf('  - Other programs competing for disk access\n');
+%     fprintf('  - Disk health issues\n');
+%     fprintf('\nRecommendations:\n');
+%     fprintf('  - Check Task Manager (Disk usage) during load\n');
+%     fprintf('  - Consider moving files to local SSD if available\n');
+%     fprintf('  - Run disk defragmentation (if HDD)\n');
+% elseif actual_mb_per_sec < 150
+%     fprintf('\n✓ Load speed is NORMAL for HDD (~50-150 MB/s)\n');
+%     fprintf('This is expected. 10 GB files will take 1-3 minutes.\n');
+% else
+%     fprintf('\n✓ Load speed is GOOD (SSD-like performance)\n');
+% end
+% 
+% %% Memory check
+% fprintf('\n--- Memory Usage ---\n');
+% fprintf('MATLAB memory after load:\n');
+% memory_info = memory;
+% fprintf('  Used: %.1f GB\n', memory_info.MemUsedMATLAB / 1e9);
+% if ispc
+%     fprintf('  System available: %.1f GB\n', memory_info.MemAvailableAllArrays / 1e9);
+% end
+% 
+% if memory_info.MemUsedMATLAB > 20e9
+%     fprintf('\n⚠️  WARNING: MATLAB is using >20 GB RAM\n');
+%     fprintf('Memory clearing between events is critical!\n');
+% end
+% 
+% fprintf('\n=== SUMMARY ===\n');
+% fprintf('File size: %.2f GB\n', file_info.bytes / 1e9);
+% fprintf('Load time: %.1f minutes\n', t_full/60);
+% fprintf('Speed: %.1f MB/s\n', actual_mb_per_sec);
+% 
+% if t_full/60 > 5 && actual_mb_per_sec < 50
+%     fprintf('\n⚠️  Your load times ARE slower than normal.\n');
+%     fprintf('Check disk location and system resources.\n');
+% elseif t_full/60 > 3 && actual_mb_per_sec > 50
+%     fprintf('\n✓ Your load times are within normal range for large files on HDD.\n');
+%     fprintf('This is expected for 10 GB files. Consider SSD for faster access.\n');
+% else
+%     fprintf('\n✓ Load performance looks normal.\n');
+% end
