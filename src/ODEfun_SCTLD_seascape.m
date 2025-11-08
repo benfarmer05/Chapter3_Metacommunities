@@ -1,209 +1,440 @@
-function f = ODEfun_SCTLD_seascape(t,Y,CLS1,CMS1,CHS1,bls,bms,bhs,kls,kms,khs,thresh,c,shapeParam,habs,P,Pdays,I0_frac,tau)
-% ODEfun_SCTLD_seascape - Multi-host SIR disease dynamics with spatial connectivity
-%
-% UPDATED: Site-wide activation when ANY class exceeds I0_frac threshold
-% - External transmission: always active (no shutoff)
-% - Local transmission: activated by smooth sigmoid when ANY class at site exceeds threshold
-% - I0_frac: threshold fraction (e.g., 0.01 = 1%) of class population
-% - tau: transition width for sigmoid (smaller = sharper activation)
-% - Key change: if LS, MS, or HS exceeds their threshold, ALL classes activate locally
 
-persistent last_k Pint_cache
-if isempty(last_k)
-    last_k = -inf;
-    Pint_cache = [];
-end
+%% without '1 -' for transmission (updated)
 
-%% Connectivity matrix
+function f = ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days)
+
+%% Select correct connectivity matrix at ODE time t
+
+persistent last_conn_index conn_cache
+if isempty(last_conn_index); last_conn_index = -inf; conn_cache = []; end
+
 tday = floor(t);
-k = max(1,find(Pdays <= tday,1,'last'));
-if isempty(k); k =1; end
 
-if k ~= last_k
-    Pint_cache = P(k).full;
-    last_k = k;
+conn_index = max(1, find(conn_days <= tday, 1, 'last'));
+
+if isempty(conn_index); conn_index = 1; end
+
+if conn_index ~= last_conn_index
+    conn_cache = conn_structs(conn_index).full;
+    last_conn_index = conn_index;
 end
 
-%% "Initial" conditions for current time step
-SLS = Y(1:habs);
-SMS = Y(habs+1:habs*2);
-SHS = Y(habs*2+1:habs*3);
-SLS = SLS(:);
-SMS = SMS(:);
-SHS = SHS(:);
+%% Extract compartment states at ODE time t
 
-LS_prez = CLS1>0;
-MS_prez = CMS1>0;
-HS_prez = CHS1>0;
-LS_prez = LS_prez(:);
-MS_prez = MS_prez(:);
-HS_prez = HS_prez(:);
+% Susceptible
+S_LS = Y(1:num_sites);
+S_MS = Y(num_sites+1:num_sites*2);
+S_HS = Y(num_sites*2+1:num_sites*3);
 
-ILS = Y(habs*3+1:habs*4);
-IMS = Y(habs*4+1:habs*5);
-IHS = Y(habs*5+1:habs*6);
-ILS = ILS(:);
-IMS = IMS(:);
-IHS = IHS(:);
+S_LS = S_LS(:); % ensure vectors are columns
+S_MS = S_MS(:);
+S_HS = S_HS(:);
 
-RLS = Y(habs*6+1:habs*7);
-RMS = Y(habs*7+1:habs*8);
-RHS = Y(habs*8+1:habs*9);
-RLS = RLS(:);
-RMS = RMS(:);
-RHS = RHS(:);
+% Infected
+I_LS = Y(num_sites*3+1:num_sites*4);
+I_MS = Y(num_sites*4+1:num_sites*5);
+I_HS = Y(num_sites*5+1:num_sites*6);
 
-%% Upstream influence - Calculate incoming disease flux
-DP = ILS + IMS + IHS;
-DP = DP(:);
+I_LS = I_LS(:);
+I_MS = I_MS(:);
+I_HS = I_HS(:);
 
-% Calculate incoming risk from connectivity
-T = incomingRisk_sparse(Pint_cache, DP, thresh, 'rowsAreSources');
+% Recovered
+R_LS = Y(num_sites*6+1:num_sites*7);
+R_MS = Y(num_sites*7+1:num_sites*8);
+R_HS = Y(num_sites*8+1:num_sites*9);
 
-% Apply transformation (if shapeParam is near 0.001, this is essentially linear)
-T = c.*(1-exp(-shapeParam.*T(:)))/(1-exp(-shapeParam));
-T = T(:);
+R_LS = R_LS(:);
+R_MS = R_MS(:);
+R_HS = R_HS(:);
 
-D_prez = DP > 0 | T > 0;
-D_prez = D_prez(:);
+% Define presence of each compartment
+LS_present = N_LS > 0;
+MS_present = N_MS > 0;
+HS_present = N_HS > 0;
 
-LS_use = LS_prez & D_prez;
-MS_use = MS_prez & D_prez;
-HS_use = HS_prez & D_prez;
+LS_present = LS_present(:);
+MS_present = MS_present(:);
+HS_present = HS_present(:);
 
-%% Calculate per-class thresholds for each site
-% Each class has its own threshold based on I0_frac
-I0_LS = I0_frac * CLS1;  % Threshold for LS class
-I0_MS = I0_frac * CMS1;  % Threshold for MS class
-I0_HS = I0_frac * CHS1;  % Threshold for HS class
+%% Define upstream disease influence
 
-% For each site, determine if ANY class has exceeded its threshold
-% This will be used to activate ALL classes at that site
-sites_to_check = LS_use | MS_use | HS_use;
+% Local disease pools
+P = I_LS + I_MS + I_HS; 
+P = P(:);
 
-% Initialize site activation signal
-site_total_I = zeros(habs, 1);
-site_min_threshold = zeros(habs, 1);
+% Disease flux (involves upstream disease pools, connectivity, and
+% thresholding to define which sites i contribute their P to site j
+incoming_flux = incomingRisk_sparse(conn_cache, P, export_thresh, 'rowsAreSources');
 
-for idx = 1:habs
-    if sites_to_check(idx)
-        % Total infected at this site across all classes
-        site_total_I(idx) = ILS(idx) + IMS(idx) + IHS(idx);
-        
-        % Minimum threshold (easiest to cross) among present classes
-        thresholds_present = [];
-        if LS_prez(idx)
-            thresholds_present = [thresholds_present; I0_LS(idx)];
-        end
-        if MS_prez(idx)
-            thresholds_present = [thresholds_present; I0_MS(idx)];
-        end
-        if HS_prez(idx)
-            thresholds_present = [thresholds_present; I0_HS(idx)];
-        end
-        
-        if ~isempty(thresholds_present)
-            site_min_threshold(idx) = min(thresholds_present);
-        end
-    end
+% NOTE - model is very sensitive to below reshaping
+incoming_flux = flux_scale .* (1 - exp(-flux_shape .* incoming_flux(:))) / (1 - exp(-flux_shape));
+incoming_flux = incoming_flux(:);
+
+disease_present = P > 0 | incoming_flux > 0;
+disease_present = disease_present(:);
+
+LS_active = LS_present & disease_present;
+MS_active = MS_present & disease_present;
+HS_active = HS_present & disease_present;
+
+%% SIR differential equations
+% NOTE - currently designed to initiate all categories with infection, not
+% just one at a time. not T_S and p_tot interaction
+
+N_LS_active = N_LS(LS_active);
+N_MS_active = N_MS(MS_active);
+N_HS_active = N_HS(HS_active);
+
+S_LS_active = S_LS(LS_active);
+S_MS_active = S_MS(MS_active);
+S_HS_active = S_HS(HS_active);
+
+I_LS_active = I_LS(LS_active);
+I_MS_active = I_MS(MS_active);
+I_HS_active = I_HS(HS_active);
+
+flux_LS = incoming_flux(LS_active);
+flux_MS = incoming_flux(MS_active);
+flux_HS = incoming_flux(HS_active);
+
+rate_loc_LS = b_LS * (I_LS_active ./ N_LS_active);
+rate_loc_MS = b_MS * (I_MS_active ./ N_MS_active);
+rate_loc_HS = b_HS * (I_HS_active ./ N_HS_active);
+
+rate_ext_LS = b_LS * flux_LS;
+rate_ext_MS = b_MS * flux_MS;
+rate_ext_HS = b_HS * flux_HS;
+
+rate_tot_LS = rate_loc_LS + rate_ext_LS;
+rate_tot_MS = rate_loc_MS + rate_ext_MS;
+rate_tot_HS = rate_loc_HS + rate_ext_HS;
+
+
+% Calculate derivatives
+dS_LS = zeros(length(S_LS), 1);
+    dS_LS(LS_active) = -rate_tot_LS .* S_LS_active;
+dS_MS = zeros(length(S_MS), 1);
+    dS_MS(MS_active) = -rate_tot_MS .* S_MS_active;
+dS_HS = zeros(length(S_HS), 1);
+    dS_HS(HS_active) = -rate_tot_HS .* S_HS_active;
+
+dI_LS = zeros(length(I_LS), 1);
+    dI_LS(LS_active) = rate_tot_LS .* S_LS_active - g_LS * I_LS_active;
+dI_MS = zeros(length(I_MS), 1);
+    dI_MS(MS_active) = rate_tot_MS .* S_MS_active - g_MS * I_MS_active;
+dI_HS = zeros(length(I_HS), 1);
+    dI_HS(HS_active) = rate_tot_HS .* S_HS_active - g_HS * I_HS_active;
+
+dR_LS = g_LS * I_LS;
+dR_MS = g_MS * I_MS;
+dR_HS = g_HS * I_HS;
+
+f = [dS_LS; dS_MS; dS_HS; dI_LS; dI_MS; dI_HS; dR_LS; dR_MS; dR_HS];
+
 end
 
-%% The SIR equations with site-wide threshold activation
-% External transmission: always active at base rate beta
-% Local transmission: smooth threshold-activated when ANY class exceeds threshold
-% All classes at a site share the same activation state
 
-% ===== LS class =====
-if any(LS_use)
-    DPLS = DP(LS_use);
-    TLS = T(LS_use);
-    fI_LS = DPLS./CLS1(LS_use);
-    
-    % External transmission: always active
-    p_ext_LS = 1 - exp(-bls * TLS);
-    
-    % Local transmission: activated by site-wide threshold
-    % Use total infected vs minimum threshold at each site
-    tau_site = site_min_threshold(LS_use) / 10;  % Adaptive tau based on threshold
-    beta_prime_LS = (bls/2) * (1 + tanh((site_total_I(LS_use) - site_min_threshold(LS_use)) ./ tau_site));
-    p_loc_LS = 1 - exp(-beta_prime_LS .* fI_LS);
-    
-    % Combine (no shutoff - both always contribute)
-    p_tot_LS = p_loc_LS + p_ext_LS - p_loc_LS.*p_ext_LS;
-else
-    p_tot_LS = [];
-end
+% %% without '1 -' for transmission
+% 
+% 
+% function f = ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,thresh,c,shapeParam,num_sites,P,conn_days)
+% % ODEfun_SCTLD_seascape - Multi-host SIR disease dynamics with spatial connectivity
+% % 
+% % MODIFIED VERSION: Uses rate-based transmission (matching R code) instead of 
+% % probability-based transmission (1 - exp(-rate))
+% %
+% % Each location has 3 variables per susceptibility class: S, I, R
+% % Disease prevalence is translated back and forth to disease cover (%).
+% 
+% persistent last_k Pint_cache
+% if isempty(last_k); last_k = -inf; Pint_cache = []; end
+% 
+% %% Connectivity matrix
+% % ODE solvers integrate across non-integer time steps. Thus, will need to
+% % interpolate connectivity matrices at time t.
+% tday = floor(t);
+% k = max(1,find(conn_days <= tday,1,'last'));
+% if isempty(k); k =1; end
+% 
+% if k ~= last_k
+%     Pint_cache = P(k).full;
+%     last_k = k;
+% end
+% 
+% %% "Initial" conditions for current time step
+% % Susceptible
+% S_LS = Y(1:num_sites);
+% S_MS = Y(num_sites+1:num_sites*2);
+% S_HS = Y(num_sites*2+1:num_sites*3);
+% S_LS = S_LS(:);
+% S_MS = S_MS(:);
+% S_HS = S_HS(:);
+% 
+% LS_present = N_LS>0;
+% MS_present = N_MS>0;
+% HS_present = N_HS>0;
+% LS_present = LS_present(:);
+% MS_present = MS_present(:);
+% HS_present = HS_present(:);
+% 
+% % Infected
+% ILS = Y(num_sites*3+1:num_sites*4);
+% IMS = Y(num_sites*4+1:num_sites*5);
+% IHS = Y(num_sites*5+1:num_sites*6);
+% ILS = ILS(:);
+% IMS = IMS(:);
+% IHS = IHS(:);
+% 
+% % Recovering
+% RLS = Y(num_sites*6+1:num_sites*7);
+% RMS = Y(num_sites*7+1:num_sites*8);
+% RHS = Y(num_sites*8+1:num_sites*9);
+% RLS = RLS(:);
+% RMS = RMS(:);
+% RHS = RHS(:);
+% 
+% %% Upstream influence
+% % Infection probability is related to susceptibility, upstream
+% % connectivity, and local disease prevalence
+% % Calculate transition of disease. Site must have disease over a threshold
+% % (defined outside ODE) in order to transmit disease.
+% DP = ILS + IMS + IHS;
+% DP = DP(:);
+% 
+% % Estimate disease FLUX, depends on upstream DP, connectivity probability,
+% % and thresh (minimum DP(i) to contribute to T(j))
+% T = incomingRisk_sparse(Pint_cache, DP, thresh,'rowsAreSources');
+% 
+% % Reshape T - this modulates how accumulated FLUX translates to local
+% % infections. Very sensitive to this.
+% T = c.*(1-exp(-shapeParam.*T(:)))/(1-exp(-shapeParam));
+% T = T(:);
+% 
+% D_present = DP > 0 | T > 0;
+% D_present = D_present(:);
+% 
+% LS_use = LS_present & D_present;
+% MS_use = MS_present & D_present;
+% HS_use = HS_present & D_present;
+% 
+% %% The SIR equations - RATE-BASED VERSION (matches R code)
+% % Changed from probability-based (1 - exp(-rate)) to direct rate formulation
+% % Implements: dI/dt = beta * S * (I_local/N + I_external) - gamma * I
+% 
+% % Initialize all derivatives to zero
+% dS_LS = zeros(length(S_LS),1);
+% dS_MS = zeros(length(S_MS),1);
+% dS_HS = zeros(length(S_HS),1);
+% 
+% dILS = zeros(length(ILS),1);
+% dIMS = zeros(length(IMS),1);
+% dIHS = zeros(length(IHS),1);
+% 
+% % LS group - rate-based transmission
+% if any(LS_use)
+%     DPLS = DP(LS_use);
+%     TLS = T(LS_use);
+% 
+%     % Local transmission: frequency-dependent (matches R code)
+%     % fI = infected fraction within group
+%     fI_LS = DPLS ./ N_LS(LS_use);
+% 
+%     % Rate-based transmission (not probability)
+%     % Local: beta * S * (I_total / N)
+%     % External: beta * S * T (T is already a rate)
+%     rate_loc_LS = b_LS * fI_LS;
+%     rate_ext_LS = b_LS * TLS;
+%     rate_tot_LS = rate_loc_LS + rate_ext_LS;
+% 
+%     dS_LS(LS_use) = -rate_tot_LS .* S_LS(LS_use);
+%     dILS(LS_use) = rate_tot_LS .* S_LS(LS_use) - g_LS * ILS(LS_use);
+% end
+% 
+% % MS group - rate-based transmission
+% if any(MS_use)
+%     DPMS = DP(MS_use);
+%     TMS = T(MS_use);
+% 
+%     fI_MS = DPMS ./ N_MS(MS_use);
+% 
+%     rate_loc_MS = b_MS * fI_MS;
+%     rate_ext_MS = b_MS * TMS;
+%     rate_tot_MS = rate_loc_MS + rate_ext_MS;
+% 
+%     dS_MS(MS_use) = -rate_tot_MS .* S_MS(MS_use);
+%     dIMS(MS_use) = rate_tot_MS .* S_MS(MS_use) - g_MS * IMS(MS_use);
+% end
+% 
+% % HS group - rate-based transmission
+% if any(HS_use)
+%     DPHS = DP(HS_use);
+%     THS = T(HS_use);
+% 
+%     fI_HS = DPHS ./ N_HS(HS_use);
+% 
+%     rate_loc_HS = b_HS * fI_HS;
+%     rate_ext_HS = b_HS * THS;
+%     rate_tot_HS = rate_loc_HS + rate_ext_HS;
+% 
+%     dS_HS(HS_use) = -rate_tot_HS .* S_HS(HS_use);
+%     dIHS(HS_use) = rate_tot_HS .* S_HS(HS_use) - g_HS * IHS(HS_use);
+% end
+% 
+% % Recovery/mortality always applies (even where transmission isn't happening)
+% dRLS = g_LS * ILS;
+% dRMS = g_MS * IMS;
+% dRHS = g_HS * IHS;
+% 
+% f = [dS_LS;dS_MS;dS_HS;dILS;dIMS;dIHS;dRLS;dRMS;dRHS];
+% 
+% end
 
-% ===== MS class =====
-if any(MS_use)
-    DPMS = DP(MS_use);
-    TMS = T(MS_use);
-    fI_MS = DPMS./CMS1(MS_use);
-    
-    p_ext_MS = 1 - exp(-bms * TMS);
-    
-    % Use same site-wide activation as LS
-    tau_site = site_min_threshold(MS_use) / 10;
-    beta_prime_MS = (bms/2) * (1 + tanh((site_total_I(MS_use) - site_min_threshold(MS_use)) ./ tau_site));
-    p_loc_MS = 1 - exp(-beta_prime_MS .* fI_MS);
-    
-    p_tot_MS = p_loc_MS + p_ext_MS - p_loc_MS.*p_ext_MS;
-else
-    p_tot_MS = [];
-end
 
-% ===== HS class =====
-if any(HS_use)
-    DPHS = DP(HS_use);
-    THS = T(HS_use);
-    fI_HS = DPHS./CHS1(HS_use);
-    
-    p_ext_HS = 1 - exp(-bhs * THS);
-    
-    % Use same site-wide activation as LS and MS
-    tau_site = site_min_threshold(HS_use) / 10;
-    beta_prime_HS = (bhs/2) * (1 + tanh((site_total_I(HS_use) - site_min_threshold(HS_use)) ./ tau_site));
-    p_loc_HS = 1 - exp(-beta_prime_HS .* fI_HS);
-    
-    p_tot_HS = p_loc_HS + p_ext_HS - p_loc_HS.*p_ext_HS;
-else
-    p_tot_HS = [];
-end
 
-%% Calculate derivatives
-dSLS = zeros(length(SLS),1);
-if any(LS_use)
-    dSLS(LS_use) = -p_tot_LS.*SLS(LS_use);
-end
 
-dSMS = zeros(length(SMS),1);
-if any(MS_use)
-    dSMS(MS_use) = -p_tot_MS.*SMS(MS_use);
-end
 
-dSHS = zeros(length(SHS),1);
-if any(HS_use)
-    dSHS(HS_use) = -p_tot_HS.*SHS(HS_use);
-end
 
-dILS = zeros(length(ILS),1);
-if any(LS_use)
-    dILS(LS_use) = p_tot_LS.*SLS(LS_use) - kls*ILS(LS_use);
-end
 
-dIMS = zeros(length(IMS),1);
-if any(MS_use)
-    dIMS(MS_use) = p_tot_MS.*SMS(MS_use) - kms*IMS(MS_use);
-end
-
-dIHS = zeros(length(IHS),1);
-if any(HS_use)
-    dIHS(HS_use) = p_tot_HS.*SHS(HS_use) - khs*IHS(HS_use);
-end
-
-dRLS = kls*ILS;
-dRMS = kms*IMS;
-dRHS = khs*IHS;
-
-f = [dSLS;dSMS;dSHS;dILS;dIMS;dIHS;dRLS;dRMS;dRHS];
-end
+% %% with shutoff valve for incoming transmission
+% 
+% function f = ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,thresh,c,shapeParam,num_sites,P,conn_days)
+% % ODEfun_SCTLD_seascape - Multi-host SIR disease dynamics with spatial connectivity
+% %
+% % Each location has 3 variables per susceptibility class: S, I, R
+% % Disease prevalence is translated back and forth to disease cover (%).
+% %
+% % Updated: Added external transmission shutoff once local infection exceeds threshold
+% % External transmission helps initiate outbreaks but turns off once sites are self-sustaining
+% 
+% persistent last_k Pint_cache
+% if isempty(last_k); last_k = -inf; Pint_cache = []; end
+% 
+% %% Connectivity matrix
+% % ODE solvers integrate across non-integer time steps. Thus, will need to
+% % interpolate connectivity matrices at time t.
+% tday = floor(t);
+% k = max(1,find(conn_days <= tday,1,'last'));
+% if isempty(k); k =1; end
+% if k ~= last_k
+%     Pint_cache = P(k).full;
+%     last_k = k;
+% end
+% 
+% %% "Initial" conditions for current time step
+% % Susceptible
+% S_LS = Y(1:num_sites);
+% S_MS = Y(num_sites+1:num_sites*2);
+% S_HS = Y(num_sites*2+1:num_sites*3);
+% S_LS = S_LS(:);
+% S_MS = S_MS(:);
+% S_HS = S_HS(:);
+% LS_present = N_LS>0;
+% MS_present = N_MS>0;
+% HS_present = N_HS>0;
+% LS_present = LS_present(:);
+% MS_present = MS_present(:);
+% HS_present = HS_present(:);
+% 
+% % Infected
+% ILS = Y(num_sites*3+1:num_sites*4);
+% IMS = Y(num_sites*4+1:num_sites*5);
+% IHS = Y(num_sites*5+1:num_sites*6);
+% ILS = ILS(:);
+% IMS = IMS(:);
+% IHS = IHS(:);
+% 
+% % Recovering
+% RLS = Y(num_sites*6+1:num_sites*7);
+% RMS = Y(num_sites*7+1:num_sites*8);
+% RHS = Y(num_sites*8+1:num_sites*9);
+% RLS = RLS(:);
+% RMS = RMS(:);
+% RHS = RHS(:);
+% 
+% %% Upstream influence
+% % Infection probability is related to susceptibility, upstream
+% % connectivity, and local disease prevalence
+% % Calculate transition of disease. Site must have disease over a threshold
+% % (defined outside ODE) in order to transmit disease.
+% DP = ILS + IMS + IHS;
+% DP = DP(:);
+% 
+% % Estimate disease FLUX, depends on upstream DP, connectivity probability,
+% % and thresh (minimum DP(i) to contribute to T(j))
+% T = incomingRisk_sparse(Pint_cache, DP, thresh,'rowsAreSources');
+% 
+% % Reshape T - this modulates how accumulated FLUX translates to local
+% % infections. Very sensitive to this.
+% T = c.*(1-exp(-shapeParam.*T(:)))/(1-exp(-shapeParam));
+% T = T(:);
+% 
+% D_present = DP > 0 | T > 0;
+% D_present = D_present(:);
+% LS_use = LS_present & D_present;
+% MS_use = MS_present & D_present;
+% HS_use = HS_present & D_present;
+% 
+% %% The SIR equations with external transmission shutoff
+% % External transmission turns off once local infection exceeds threshold
+% % This allows connectivity to initiate outbreaks but not dominate intensity
+% 
+% % Define "kickoff" threshold: 2x typical initial seeding (0.01% of cover)
+% % Sites above this threshold are considered "self-sustaining"
+% kickoff_threshold = 2 * 0.0001;  % 0.02% absolute cover
+% 
+% % For LS class
+% DPLS = DP(LS_use);
+% TLS = T(LS_use);
+% fI_LS = DPLS./N_LS(LS_use);
+% p_loc_LS = 1 - exp(-b_LS * fI_LS);
+% p_ext_LS = 1 - exp(-b_LS * TLS);
+% 
+% % Turn off external if local infection exceeds threshold
+% local_established_LS = ILS(LS_use) > kickoff_threshold;
+% p_ext_LS_active = (~local_established_LS) .* p_ext_LS;
+% p_tot_LS = p_loc_LS + p_ext_LS_active - p_loc_LS.*p_ext_LS_active;
+% 
+% % For MS class
+% DPMS = DP(MS_use);
+% TMS = T(MS_use);
+% fI_MS = DPMS./N_MS(MS_use);
+% p_loc_MS = 1 - exp(-b_MS * fI_MS);
+% p_ext_MS = 1 - exp(-b_MS * TMS);
+% 
+% local_established_MS = IMS(MS_use) > kickoff_threshold;
+% p_ext_MS_active = (~local_established_MS) .* p_ext_MS;
+% p_tot_MS = p_loc_MS + p_ext_MS_active - p_loc_MS.*p_ext_MS_active;
+% 
+% % For HS class
+% DPHS = DP(HS_use);
+% THS = T(HS_use);
+% fI_HS = DPHS./N_HS(HS_use);
+% p_loc_HS = 1 - exp(-b_HS * fI_HS);
+% p_ext_HS = 1 - exp(-b_HS * THS);
+% 
+% local_established_HS = IHS(HS_use) > kickoff_threshold;
+% p_ext_HS_active = (~local_established_HS) .* p_ext_HS;
+% p_tot_HS = p_loc_HS + p_ext_HS_active - p_loc_HS.*p_ext_HS_active;
+% 
+% % Calculate derivatives
+% dS_LS = zeros(length(S_LS),1);
+%     dS_LS(LS_use) = -p_tot_LS.*S_LS(LS_use);
+% dS_MS = zeros(length(S_MS),1);
+%     dS_MS(MS_use) = -p_tot_MS.*S_MS(MS_use);
+% dS_HS = zeros(length(S_HS),1);
+%     dS_HS(HS_use) = -p_tot_HS.*S_HS(HS_use);
+% 
+% dILS = zeros(length(ILS),1);
+%     dILS(LS_use) = p_tot_LS.*S_LS(LS_use) - g_LS*ILS(LS_use);
+% dIMS = zeros(length(IMS),1);
+%     dIMS(MS_use) = p_tot_MS.*S_MS(MS_use) - g_MS*IMS(MS_use);
+% dIHS = zeros(length(IHS),1);
+%     dIHS(HS_use) = p_tot_HS.*S_HS(HS_use) - g_HS*IHS(HS_use);
+% 
+% dRLS = g_LS*ILS;
+% dRMS = g_MS*IMS;
+% dRHS = g_HS*IHS;
+% 
+% f = [dS_LS;dS_MS;dS_HS;dILS;dIMS;dIHS;dRLS;dRMS;dRHS];
+% end
