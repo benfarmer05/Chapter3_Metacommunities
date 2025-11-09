@@ -1,69 +1,64 @@
+function T = incomingRisk_sparse(Pint, DP, thresh, orientation)
 
-function flux = incomingRisk_sparse(conn_cache, P, export_thresh, orientation)
-%
-% Computes flux_j = 1 - prod_i (1 - P(i)*conn_cache(i,j)) over nonzero edges.
-% conn_cache: n×n sparse (rows = sources, cols = destinations by default)
-% P  : n×1 column vector of source locations' disease pools
-% export_thresh: scalar; sites with P <= export_thresh are ignored
+% T = incomingRisk_sparse(Pint, DP, thresh, orientation)
+% Computes T_j = 1 - prod_i (1 - DP(i)*Pint(i,j)) over nonzero edges.
+% Pint: n×n sparse (rows=sources, cols=destinations by default)
+% DP  : n×1 column vector of source “infection intensity”
+% thresh: scalar; sources with DP <= thresh are ignored
 % orientation (optional): 'rowsAreSources' (default) or 'colsAreSources'
 %
-% Returns flux as n×1 (column)
+% Returns T as n×1 (column). Transpose at call site if you need a row.
 
     if nargin < 4 || isempty(orientation)
         orientation = 'rowsAreSources';
     end
 
     % ---- Coerce shapes, validate sizes ----
-    if ~issparse(conn_cache)
+    if ~issparse(Pint)
         warning('incomingRisk_sparse:ExpectSparse', ...
-                'Cached connectivity matrix is not sparse; converting (this may be slow).');
-        conn_cache = sparse(conn_cache);
+                'Pint is not sparse; converting (this may be slow).');
+        Pint = sparse(Pint);
     end
 
-    [n1, n2] = size(conn_cache);
-    
+    [n1, n2] = size(Pint);
     if n1 ~= n2
         error('incomingRisk_sparse:SquareRequired', ...
-              'Connectivity matrix must be square; got %dx%d.', n1, n2);
+              'Pint must be square; got %dx%d.', n1, n2);
     end
-
     n = n1;
 
-    P = P(:);
-
-    if numel(P) ~= n
+    DP = DP(:);                 % force column
+    if numel(DP) ~= n
         error('incomingRisk_sparse:SizeMismatch', ...
-              'numel(P)=%d does not match size(conn_cache,1)=%d.', numel(P), n);
+              'numel(DP)=%d does not match size(Pint,1)=%d.', numel(DP), n);
     end
 
     % ---- Extract edges ----
-    [is, js, vs] = find(conn_cache);  % all column vectors
+    [is, js, vs] = find(Pint);  % all column vectors
 
     switch lower(orientation)
         case 'rowsaresources'
             % as-is: i = source, j = dest
         case 'colsaresources'
-            % flip if your conn_cache uses columns as sources
+            % flip if your Pint uses columns as sources
             [is, js] = deal(js, is);
         otherwise
             error('incomingRisk_sparse:BadOrientation', ...
                   'orientation must be ''rowsAreSources'' or ''colsAreSources''.');
     end
 
-    % ---- Filter to active sources (P > thresh) ----
-    active = P(is) > export_thresh;
-
+    % ---- Filter to active sources (DP > thresh) ----
+    active = DP(is) > thresh;
     if ~any(active)
-        flux = zeros(n, 1); % nothing contributing → zero incoming risk
+        T = zeros(n,1);         % nothing contributing → zero incoming risk
         return
     end
-
     is = is(active);
     js = js(active);
     vs = vs(active);
 
     % ---- Edge weights and stability clamps ----
-    w = P(is) .* vs; % element-wise; both column
+    w = DP(is) .* vs;           % element-wise, both column
     % numerical safety: keep 0 <= w < 1
     w = max(0, min(w, 1 - eps));
 
@@ -72,15 +67,13 @@ function flux = incomingRisk_sparse(conn_cache, P, export_thresh, orientation)
     s = accumarray(js, log1p(-w), [n, 1], @sum, 0);
 
     % ---- T = 1 - exp(Σ log(1 - w)) ----
-    flux = 1 - exp(s);
+    T = 1 - exp(s);
 
     % Guard against any rare numeric issues
-    bad = ~isfinite(flux) | flux < 0 | flux > 1;
-
+    bad = ~isfinite(T) | T < 0 | T > 1;
     if any(bad)
         % Replace non-finite with zeros; clamp to [0,1]
-        flux(~isfinite(flux)) = 0;
-        flux = max(0, min(flux, 1));
+        T(~isfinite(T)) = 0;
+        T = max(0, min(T, 1));
     end
-
 end

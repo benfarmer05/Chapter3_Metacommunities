@@ -1,57 +1,65 @@
-
 clear; clc
 
-%% setup
+%% Initialize paths
 projectPath = matlab.project.rootProject().RootFolder;
 tempPath = fullfile(projectPath, 'temp');
 dataPath = fullfile(projectPath, 'data');
 outputPath = fullfile(projectPath, 'output');
 seascapePath = fullfile(outputPath, 'seascape_SIR');
 
+% Create output directory if it doesn't exist
+if ~exist(seascapePath, 'dir')
+    mkdir(seascapePath);
+end
+
+%% Toggle: Load connectivity matrices or use cached version
 RECALCULATE_CONNECTIVITY = false;  % Set to false to load from temp/P.mat
 RUN_PARAMETER_SWEEP = true;        % Set to false to load from temp/ParameterSweep_Results.mat
 USE_PARALLEL = true;               % Set to true to use parallel computing (requires Parallel Computing Toolbox)
 
-% DATE_RANGE = [];  % Empty = create/load all connectivity matrices
-% DATE_RANGE = [datetime(2019,1,1), datetime(2019,3,31)];  % just Q1
-DATE_RANGE = [datetime(2019,1,1), datetime(2019,6,30)];  % Q1-Q2
+% Optional: Filter connectivity matrices by date range (leave empty to load all)
+% Example: DATE_RANGE = [datetime(2019,1,1), datetime(2019,3,31)];  % Q1 only
+% DATE_RANGE = [];  % Empty = load all matrices
+DATE_RANGE = [datetime(2019,1,1), datetime(2019,3,31)];  % Q1 only
 
 %% Load reef data from CSV
-
 reefDataFile = fullfile(dataPath, 'centroids_vertices_FINALFORCMS.csv');
 reefData = readtable(reefDataFile);
 
 % Extract reef information
 unique_IDs = reefData.unique_ID;
-locations = [reefData.centroid_lon, reefData.centroid_lat];
-num_sites = height(reefData);
+XY = [reefData.centroid_lon, reefData.centroid_lat];
+habs = height(reefData); % The number of patches
 
-%% Create or load existing connectivity matrices
+% Extract coral cover by group
+CLS1 = reefData.low_coral_cover;
+CMS1 = reefData.moderate_coral_cover;
+CHS1 = reefData.high_coral_cover;
+CC = reefData.mean_coral_cover; % Total coral cover @ each site
 
-% Generate connectivity (conn_structs) cache filename based on date range
+%% Load connectivity matrices from all quarters
+% Generate cache filename based on date range
 if ~isempty(DATE_RANGE)
-    cacheFilename = sprintf('conn_structs_%s_to_%s.mat', ...
-                           string(DATE_RANGE(1), 'yyyyMMdd'), ...
-                           string(DATE_RANGE(2), 'yyyyMMdd'));
+    cacheFilename = sprintf('P_%s_to_%s.mat', ...
+                           datestr(DATE_RANGE(1), 'yyyymmdd'), ...
+                           datestr(DATE_RANGE(2), 'yyyymmdd'));
 else
-    cacheFilename = 'conn_structs.mat';  % Full dataset
+    cacheFilename = 'P.mat';  % Full dataset
 end
 cacheFilePath = fullfile(tempPath, cacheFilename);
-
 
 if RECALCULATE_CONNECTIVITY
     fprintf('========================================\n');
     fprintf('Loading connectivity matrices from disk\n');
     if ~isempty(DATE_RANGE)
         fprintf('Date range filter: %s to %s\n', ...
-                string(DATE_RANGE(1), 'dd-MMM-yyyy'), ...
-                string(DATE_RANGE(2), 'dd-MMM-yyyy'));
+                datestr(DATE_RANGE(1)), datestr(DATE_RANGE(2)));
     end
     fprintf('========================================\n\n');
     
     % Pattern to match: connectivity_2019_[Date]_120000.mat
     quarters = {'Q1_2019', 'Q2_2019', 'Q3_2019', 'Q4_2019'};
-    conn_structs = struct();
+    P = struct();
     connCount = 0;
 
     % NOTE: decay_weights normalization - currently using fixed value
@@ -101,22 +109,21 @@ if RECALCULATE_CONNECTIVITY
             % File is in range - now load it
             connCount = connCount + 1;
             filesLoaded = filesLoaded + 1;
-            fprintf('  [%d] Loading: %s (Date: %s)\n', connCount, filename, string(Dat, 'dd-MMM-yyyy'));
+            fprintf('  [%d] Loading: %s (Date: %s)\n', connCount, filename, datestr(Dat));
             
             Con = load(filenam);  % Load full file now
             
             % Verify date matches (optional sanity check)
             Dat_actual = Con.connectivity_results.calendar_date;
             if abs(days(Dat - Dat_actual)) > 0.1
-                warning('Filename date mismatch: %s vs %s', string(Dat, 'dd-MMM-yyyy'), string(Dat_actual, 'dd-MMM-yyyy'));
-
+                warning('Filename date mismatch: %s vs %s', datestr(Dat), datestr(Dat_actual));
             end
             
             % Extract date information
-            conn_structs(connCount).DY = day(Dat);
-            conn_structs(connCount).MO = month(Dat);
-            conn_structs(connCount).YR = year(Dat);
-            conn_structs(connCount).Date = Dat;
+            P(connCount).DY = day(Dat);
+            P(connCount).MO = month(Dat);
+            P(connCount).YR = year(Dat);
+            P(connCount).Date = Dat;
             
             % Process connectivity matrix
             conmat = sparse(Con.connectivity_results.ConnMatrix_raw);
@@ -127,7 +134,7 @@ if RECALCULATE_CONNECTIVITY
             % Normalize
             conmat = conmat ./ norm_val;
             
-            conn_structs(connCount).full = conmat;
+            P(connCount).full = conmat;
         end
         
         if filesLoaded > 0
@@ -139,17 +146,16 @@ if RECALCULATE_CONNECTIVITY
 
     % Sort by date
     fprintf('Sorting %d matrices by date...\n', connCount);
-    [~, sortIdx] = sort([conn_structs.Date]);
-    conn_structs = conn_structs(sortIdx);
+    [~, sortIdx] = sort([P.Date]);
+    P = P(sortIdx);
 
     fprintf('Saving processed connectivity data to %s...\n', cacheFilename);
-    save(cacheFilePath, 'conn_structs', '-v7.3')
+    save(cacheFilePath, 'P', '-v7.3')
     
     fprintf('\n========================================\n');
     fprintf('COMPLETE: Loaded %d connectivity matrices\n', connCount);
     if ~isempty(DATE_RANGE)
-        fprintf('Date range: %s to %s\n', string(DATE_RANGE(1), 'dd-MMM-yyyy'), ...
-            string(DATE_RANGE(2), 'dd-MMM-yyyy'));
+        fprintf('Date range: %s to %s\n', datestr(DATE_RANGE(1)), datestr(DATE_RANGE(2)));
     end
     fprintf('Cached to: %s\n', cacheFilename);
     fprintf('========================================\n\n');
@@ -164,115 +170,116 @@ else
                'Set RECALCULATE_CONNECTIVITY = true to generate it.'], cacheFilePath);
     end
     
-    load(cacheFilePath, 'conn_structs');
-    fprintf('COMPLETE: Loaded %d connectivity matrices from cache\n', length(conn_structs));
+    load(cacheFilePath, 'P');
+    fprintf('COMPLETE: Loaded %d connectivity matrices from cache\n', length(P));
     if ~isempty(DATE_RANGE)
         fprintf('Date range: %s to %s\n', ...
-                string(min([conn_structs.Date]), 'dd-MMM-yyyy'), string(max([conn_structs.Date]), 'dd-MMM-yyyy'));
+                datestr(min([P.Date])), datestr(max([P.Date])));
     end
     fprintf('========================================\n\n');
 end
 
-
-fprintf('\n=== CONNECTIVITY DIAGNOSTICS ===\n');
-first_matrix = conn_structs(1).full;
-max_val = full(max(first_matrix(:)));
-mean_val = full(mean(nonzeros(first_matrix)));
-num_connections = nnz(first_matrix);
-
-fprintf('Max connectivity value: %f\n', max_val);
-fprintf('Mean nonzero connectivity: %f\n', mean_val);
-fprintf('Number of nonzero connections: %d\n', num_connections);
-fprintf('================================\n\n');
-
-
-% Define day vector for SIR function (days since Jan 1, or other defined
-% reference start date)
-dates = [conn_structs.Date];
+% Define day vector for the ODE - days since reference date
+dates = [P.Date];
 ref = datetime(2019,1,1);  
-conn_days = days(dates - ref);
+Pdays = days(dates - ref);
 
-%% set state variables & parameters
+%% Initial conditions
 
-% 'N' is coral cover pre-SCTLD
-N_LS = reefData.low_coral_cover;
-N_MS = reefData.moderate_coral_cover;
-N_HS = reefData.high_coral_cover;
+% Initial susceptible coral cover
+SLS1 = CLS1;
+SMS1 = CMS1;
+SHS1 = CHS1;
 
-N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
+% Initial diseased coral at every hab
+ILS1 = zeros(habs,1);
+IMS1 = zeros(habs,1);
+IHS1 = zeros(habs,1);
 
-% define how to seed disease at Flat Cay (or wherever chosen starting
-%   location is placed)
-%       NOTE - carefully consider seed value chosen here, and how many sites are
-%       released from
-seed_frac = 0.00001;
-% seed_frac = 0.01;
-
-% pre-define vectors for initial infected and recovered (dead) coral cover
-I_LS_init = zeros(num_sites,1);
-I_MS_init = zeros(num_sites,1);
-I_HS_init = zeros(num_sites,1);
-R_LS_init = zeros(num_sites,1);
-R_MS_init = zeros(num_sites,1);
-R_HS_init = zeros(num_sites,1);
-
+% Where did the disease start? These indices were provided by BEN.
+% Consider CHANGING the initial values of disease. Here I am seeding BOTH
+% HS and LS corals. 
+% 
+% ****NOTE**** It DOES matter if you start the disease in a
+% single FLAT grid cell vs 2 or 3 or 4. These cells appear to have
+% different connectivity in the first weeks of 2019.
+%
 % Flat Cay site IDs (29088 is the preferred/primary location):
-flat_cay_site_IDs = [find(reefData.unique_ID==29088) find(reefData.unique_ID==29338) ...
+Flat = [find(reefData.unique_ID==29088) find(reefData.unique_ID==29338) ...
         find(reefData.unique_ID==29089) find(reefData.unique_ID==29339) ...
         find(reefData.unique_ID==29087)];
 
-I_HS_init(flat_cay_site_IDs) = seed_frac * N_HS(flat_cay_site_IDs);
-I_MS_init(flat_cay_site_IDs) = seed_frac * N_MS(flat_cay_site_IDs);
-I_LS_init(flat_cay_site_IDs) = seed_frac * N_LS(flat_cay_site_IDs);
+IHS1(Flat) = .01*CHS1(Flat); % Likely sensitive to how much disease you set initially
+SHS1(Flat) = SHS1(Flat)-IHS1(Flat);
+IMS1(Flat) = .01*CMS1(Flat); % Likely sensitive to how much disease you set initially
+SMS1(Flat) = SMS1(Flat)-IMS1(Flat);
+ILS1(Flat) = .01*CLS1(Flat); % Likely sensitive to how much disease you set initially
+SLS1(Flat) = SLS1(Flat)-ILS1(Flat);
 
-% Pre-define vectors for initial susceptible coral cover
-S_LS_init = N_LS - I_LS_init;
-S_MS_init = N_MS - I_MS_init;
-S_HS_init = N_HS - I_HS_init;
+% Initial dead cover - this used to be "recovered" (hence the R)
+RLS1 = zeros(habs,1);
+RMS1 = zeros(habs,1);
+RHS1 = zeros(habs,1);
 
-% Pack state variables for SIR function
-Y0 = [S_LS_init; S_MS_init; S_HS_init; I_LS_init; I_MS_init; I_HS_init; R_LS_init; R_MS_init; R_HS_init];
+%% Parameters
+% Most parameters should be unique for each category of coral. This is the
+% meat and potatoes of disease dynamics at each site. Note that rates are
+% sensitive to time step.
+ 
+% Infection, beta - Ben's paper, multihost, NS
+bls = 0.03;
+bms = 0.14;
+bhs = 2.08;
 
-% beta (transmission rate)
-b_LS = 0.03;
-b_MS = 0.14;
-b_HS = 2.08;
+% Recovery rate, gamma - Ben's paper, multihost, NS
+kls = .05; %
+kms = .55;% 
+khs = 3.33;% 
 
-% gamma (mortality rate)
-g_LS = .05;
-g_MS = .55;
-g_HS = 3.33;
+% A (minimum) threshold amount of diseased tissue (cover) a site must have in order
+% to transmit disease to other sites. May need to be OPTIMIZED. Or not
+% used.
+% Some thoughts - if an outgoin or incoming threshold is not used, sites
+% can get infected very quickly, even if at very low magnitudes. One
+% approach might be to think about % of bottom... another might be to think
+% of the stage of a local outbreak...
+thresh = 0.0003; % At .001, transmission from Flat is unlikely with current parameterization. At .0005 disease immediatelyy begins to transmit but not super duper fast...
 
-% threshold of (ABSOLUTE) diseased coral cover at which a site can begin
-% to export disease to other sites
-%   NOTE - should also consider thresholding based off of the relative
-%   cover of a site / its susceptibility groups. or outbreak
-%   stage/intensity
-% export_thresh = 0.0003; % At .001, transmission from flat_cay_site_IDs is unlikely with current parameterization. At .0005 disease immediately begins to transmit but not super duper fast...
-export_thresh = 0;
-% export_thresh = 999;
+% NO LONGER TRUE -- A (minimum) threshold for incoming disease probability to result in local infection.
+% thresh2 = .00000001;
 
-% reshape parameters for controlling the contribution of upstream disease
-% mass to local disease pool in each patch (site)
-%   flux_scale.*(1-exp(-flux_shape.*T(:)))/(1-exp(-flux_shape));
-flux_scale = 1; % limits max, ranges 0:1
-% flux_scale = 0; % limits max, ranges 0:1
-% flux_shape = -4; % determines curve shape. <0 is concave, >0 is convex; set small (.001) for no (linear) reshape. 0 yields infinity
-flux_shape = 0.001; % determines curve shape. <0 is concave, >0 is convex; set small (.001) for no (linear) reshape. 0 yields infinity
+% I've added a reshape that controls the input of T to local DP. 
+% c.*(1-exp(-shapeParam.*T(:)))/(1-exp(-shapeParam));
+c = 1; % limits max, ranges 0:1
+shapeParam = -4; % determines curve shape. <0 is concave, >0 is convex; set small (.001) for no (linear) reshape. 0 will produce Inf and result in no transmission.
 
-%% serial test model run
+% Save all parameters to a vector for use later...
+% pars = [bls; bms; bhs; kls; kms; khs; thresh; sh1; sh2];
+pars_simp = [bls; bms; bhs; kls; kms; khs];
 
-opts = odeset('OutputFcn', @odeWaitbar);
+%% The ODE Solver - full
+
+% Initial conditions to supply to the ODE solver. These are arranged in a
+% single vertical vector. The order matters! Notice that dead proportion is
+% ignored until the end. It is 1-(S+I+R).
+Y0 = [SLS1;SMS1;SHS1;ILS1;IMS1;IHS1;RLS1;RMS1;RHS1]; 
+save(fullfile(tempPath, 'inits_01.mat'), 'Y0')
+
+% If not using odeWaitbar, turn this off
+opts  = odeset('OutputFcn', @odeWaitbar);
+
+% The time span to integrate in days
 tspan = [1 365]; 
 
-% Adjust tspan to not exceed available connectivity data
-max_conn_day = round(days(max([conn_structs.Date]) - datetime(2019,1,1)));
+% Check compatibility between tspan and loaded connectivity matrices
+% Automatically adjust tspan to not exceed available connectivity data
+max_conn_day = round(days(max([P.Date]) - datetime(2019,1,1)));
 
 if tspan(end) > max_conn_day
     fprintf('\n*** TSPAN ADJUSTMENT ***\n');
     fprintf('Original tspan requested: [%d %d]\n', tspan(1), tspan(end));
     fprintf('Available connectivity data: up to day %d (date: %s)\n', ...
-            max_conn_day, string(max([conn_structs.Date]), 'dd-MMM-yyyy'));
+            max_conn_day, datestr(max([P.Date]), 'dd-mmm-yyyy'));
     fprintf('Adjusting tspan to: [%d %d]\n', tspan(1), max_conn_day);
     fprintf('************************\n\n');
     tspan(end) = max_conn_day;
@@ -284,612 +291,24 @@ tspan_final = tspan;
 % The ODE solver. Note that ODEfun_SCTLD_seascape is a separate .m file 
 clear Y t
 tic
-[t,Y] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days), tspan, Y0, opts);
-% [t,Y] = ode15s(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days), tspan, Y0, opts);
+[t,Y] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,CLS1,CMS1,CHS1,bls,bms,bhs,kls,kms,khs,thresh,c,shapeParam,habs,P,Pdays), tspan, Y0, opts);
 toc
 
-%% POST-SERIAL-RUN DIAGNOSTICS (before parameter sweep)
+% save(fullfile(seascapePath, 'RealRun_0001.mat'), 'Y', 'Y0', 'CLS1', 'CMS1', 'CHS1', 't', 'pars_simp')
 
+%% Parameter sweep for threshold and shape parameter optimization
 
-% Add this right after your ODE run, before any plotting:
-
-fprintf('\n=== INCOMING FLUX DIAGNOSTICS ===\n');
-
-% Calculate initial disease pool at seed sites
-P_initial = I_LS_init + I_MS_init + I_HS_init;
-
-% Get initial incoming flux at all sites using first connectivity matrix
-initial_flux = incomingRisk_sparse(conn_structs(1).full, P_initial, export_thresh, 'rowsAreSources');
-
-% After reshaping (like in your ODE function)
-initial_flux_reshaped = flux_scale .* (1 - exp(-flux_shape .* initial_flux)) / (1 - exp(-flux_shape));
-
-% Check at seed sites
-fprintf('Seed sites (IDs: %s):\n', mat2str(unique_IDs(flat_cay_site_IDs)));
-fprintf('  Raw incoming flux range: [%.6f, %.6f]\n', ...
-    min(initial_flux(flat_cay_site_IDs)), max(initial_flux(flat_cay_site_IDs)));
-fprintf('  Reshaped incoming flux range: [%.6f, %.6f]\n', ...
-    min(initial_flux_reshaped(flat_cay_site_IDs)), max(initial_flux_reshaped(flat_cay_site_IDs)));
-
-% Check at nearby non-seed sites (within 5 km of seed sites)
-seed_locs = locations(flat_cay_site_IDs, :);
-distances = pdist2(locations, seed_locs);
-min_dist = min(distances, [], 2);
-nearby_sites = find(min_dist < 5000 & min_dist > 0);  % 5 km radius, excluding seed sites
-
-if ~isempty(nearby_sites)
-    fprintf('\nNearby sites (within 5km, n=%d):\n', length(nearby_sites));
-    fprintf('  Raw incoming flux range: [%.6f, %.6f]\n', ...
-        min(initial_flux(nearby_sites)), max(initial_flux(nearby_sites)));
-    fprintf('  Reshaped incoming flux range: [%.6f, %.6f]\n', ...
-        min(initial_flux_reshaped(nearby_sites)), max(initial_flux_reshaped(nearby_sites)));
-    fprintf('  Mean reshaped flux: %.6f\n', mean(initial_flux_reshaped(nearby_sites)));
-end
-
-% Also check during simulation - extract at day 30
-day30_idx = find(t >= 30, 1, 'first');
-if ~isempty(day30_idx)
-    P_day30 = Y(day30_idx, 3*num_sites+1:4*num_sites) + ...
-              Y(day30_idx, 4*num_sites+1:5*num_sites) + ...
-              Y(day30_idx, 5*num_sites+1:6*num_sites);
-    
-    % Find which connectivity matrix was used at day 30
-    conn_idx_day30 = max(1, find(conn_days <= 30, 1, 'last'));
-    flux_day30 = incomingRisk_sparse(conn_structs(conn_idx_day30).full, P_day30', export_thresh, 'rowsAreSources');
-    flux_day30_reshaped = flux_scale .* (1 - exp(-flux_shape .* flux_day30)) / (1 - exp(-flux_shape));
-    
-    fprintf('\nDay 30 (after some spread):\n');
-    fprintf('  Sites with P > 0: %d\n', sum(P_day30 > 0));
-    fprintf('  Max reshaped flux anywhere: %.6f\n', max(flux_day30_reshaped));
-    fprintf('  Mean reshaped flux (sites with flux>0): %.6f\n', mean(flux_day30_reshaped(flux_day30_reshaped > 0)));
-end
-
-fprintf('================================\n\n');
-
-
-%SHART
-
-
-
-% Extract compartments from Y
-LSHP_temp = Y(:,1:num_sites);
-MSHP_temp = Y(:,num_sites+1:num_sites*2);
-HSHP_temp = Y(:,2*num_sites+1:num_sites*3);
-LSIP_temp = Y(:,3*num_sites+1:num_sites*4);
-MSIP_temp = Y(:,4*num_sites+1:num_sites*5);
-HSIP_temp = Y(:,5*num_sites+1:num_sites*6);
-LSRP_temp = Y(:,6*num_sites+1:num_sites*7);
-MSRP_temp = Y(:,7*num_sites+1:num_sites*8);
-HSRP_temp = Y(:,8*num_sites+1:num_sites*9);
-
-% Interpolate to daily timesteps
-interpLSHP_temp = interp1(t,LSHP_temp,tspan(1):tspan(2));
-interpMSHP_temp = interp1(t,MSHP_temp,tspan(1):tspan(2));
-interpHSHP_temp = interp1(t,HSHP_temp,tspan(1):tspan(2));
-interpLSIP_temp = interp1(t,LSIP_temp,tspan(1):tspan(2));
-interpMSIP_temp = interp1(t,MSIP_temp,tspan(1):tspan(2));
-interpHSIP_temp = interp1(t,HSIP_temp,tspan(1):tspan(2));
-interpLSRP_temp = interp1(t,LSRP_temp,tspan(1):tspan(2));
-interpMSRP_temp = interp1(t,MSRP_temp,tspan(1):tspan(2));
-interpHSRP_temp = interp1(t,HSRP_temp,tspan(1):tspan(2));
-
-% Pick first seed site for analysis
-example_site = flat_cay_site_IDs(1);
-
-% Calculate totals for mass balance
-total_S_temp = interpLSHP_temp(:,example_site) + interpMSHP_temp(:,example_site) + interpHSHP_temp(:,example_site);
-total_I_temp = interpLSIP_temp(:,example_site) + interpMSIP_temp(:,example_site) + interpHSIP_temp(:,example_site);
-total_R_temp = interpLSRP_temp(:,example_site) + interpMSRP_temp(:,example_site) + interpHSRP_temp(:,example_site);
-total_mass_temp = total_S_temp + total_I_temp + total_R_temp;
-
-fprintf('\n=== SERIAL RUN DIAGNOSTICS ===\n');
-fprintf('Mass balance check at site %d:\n', unique_IDs(example_site));
-fprintf('  Initial total: %.8f\n', total_mass_temp(1));
-fprintf('  Final total: %.8f\n', total_mass_temp(end));
-fprintf('  Mass variation: %.2e (should be ~0)\n', max(total_mass_temp) - min(total_mass_temp));
-fprintf('===============================\n\n');
-
-% Diagnostic plots
-figure('Name', 'Serial Run - Post-Run Diagnostics');
-
-subplot(2,2,1);
-I_total_at_seeds_temp = interpLSIP_temp(:, flat_cay_site_IDs) + interpMSIP_temp(:, flat_cay_site_IDs) + interpHSIP_temp(:, flat_cay_site_IDs);
-plot(I_total_at_seeds_temp, 'LineWidth', 1.5);
-xlabel('Day'); ylabel('Infected coral cover');
-title('Infection trajectory at seed sites');
-legend(arrayfun(@(x) sprintf('Site %d', unique_IDs(x)), flat_cay_site_IDs, 'UniformOutput', false), 'Location', 'best');
-grid on;
-
-subplot(2,2,2);
-P_at_seeds_temp = interpLSIP_temp(:,flat_cay_site_IDs) + interpMSIP_temp(:,flat_cay_site_IDs) + interpHSIP_temp(:,flat_cay_site_IDs);
-plot(P_at_seeds_temp, 'LineWidth', 1.5);
-xlabel('Day'); ylabel('Disease pool (P)');
-title('Disease pool at seed sites');
-yline(export_thresh, 'r--', 'LineWidth', 2);
-text(tspan(2)*0.7, export_thresh*1.1, 'Export threshold', 'Color', 'r');
-grid on;
-
-subplot(2,2,3);
-plot(total_S_temp, 'b', 'LineWidth', 1.5); hold on;
-plot(total_I_temp, 'r', 'LineWidth', 1.5);
-plot(total_R_temp, 'k', 'LineWidth', 1.5);
-xlabel('Day'); ylabel('Cover');
-title(sprintf('Total SIR - Site %d', unique_IDs(example_site)));
-legend('S','I','R');
-grid on;
-
-subplot(2,2,4);
-plot(total_mass_temp, 'LineWidth', 1.5);
-xlabel('Day'); ylabel('S+I+R');
-title('Mass balance (should be constant)');
-grid on;
-
-% Detailed SIR by group
-figure('Name', 'Serial Run - Detailed SIR by Group', 'Position', [150 150 1400 800]);
-
-subplot(2,2,1);
-plot(interpLSHP_temp(:,example_site), 'b', 'LineWidth', 1.5); hold on;
-plot(interpLSIP_temp(:,example_site), 'r', 'LineWidth', 1.5);
-plot(interpLSRP_temp(:,example_site), 'k', 'LineWidth', 1.5);
-xlabel('Day'); ylabel('Cover');
-title(sprintf('LS Group - Site %d', unique_IDs(example_site)));
-legend('S','I','R');
-grid on;
-
-subplot(2,2,2);
-plot(interpMSHP_temp(:,example_site), 'b', 'LineWidth', 1.5); hold on;
-plot(interpMSIP_temp(:,example_site), 'r', 'LineWidth', 1.5);
-plot(interpMSRP_temp(:,example_site), 'k', 'LineWidth', 1.5);
-xlabel('Day'); ylabel('Cover');
-title(sprintf('MS Group - Site %d', unique_IDs(example_site)));
-legend('S','I','R');
-grid on;
-
-subplot(2,2,3);
-plot(interpHSHP_temp(:,example_site), 'b', 'LineWidth', 1.5); hold on;
-plot(interpHSIP_temp(:,example_site), 'r', 'LineWidth', 1.5);
-plot(interpHSRP_temp(:,example_site), 'k', 'LineWidth', 1.5);
-xlabel('Day'); ylabel('Cover');
-title(sprintf('HS Group - Site %d', unique_IDs(example_site)));
-legend('S','I','R');
-grid on;
-
-subplot(2,2,4);
-plot(total_S_temp, 'b', 'LineWidth', 1.5); hold on;
-plot(total_I_temp, 'r', 'LineWidth', 1.5);
-plot(total_R_temp, 'k', 'LineWidth', 1.5);
-xlabel('Day'); ylabel('Cover');
-title(sprintf('Total - Site %d', unique_IDs(example_site)));
-legend('S','I','R');
-grid on;
-
-
-% Check if external flux is truly zero at seed sites
-P_initial = I_LS_init + I_MS_init + I_HS_init;  % Calculate initial disease pool
-test_flux = incomingRisk_sparse(conn_structs(1).full, P_initial, export_thresh, 'rowsAreSources');
-fprintf('Max incoming flux with export_thresh=999: %e\n', max(test_flux));
-fprintf('Sites with non-zero flux: %d out of %d\n', sum(test_flux > 0), length(test_flux));
-
-
-site_idx = find(reefData.unique_ID == 29089);
-fprintf('Site 29089: LS=%.4f, MS=%.4f, HS=%.4f\n', N_LS(site_idx), N_MS(site_idx), N_HS(site_idx));
-
-
-
-%SHART
-
-
-
-
-%% Make diagnostic movie - spatial visualization of disease spread
-
-fprintf('Creating diagnostic movie...\n');
-
-% Extract infected, susceptible, and removed populations over time
-TIP = interpLSIP_temp + interpMSIP_temp + interpHSIP_temp;  % Total infected
-TSP = interpLSHP_temp + interpMSHP_temp + interpHSHP_temp;  % Total susceptible  
-TRP = interpLSRP_temp + interpMSRP_temp + interpHSRP_temp;  % Total removed
-
-% Create figure
-f = figure('renderer', 'zbuffer','Position', [10 10 1400 1000]);
-set(f,'nextplot','replacechildren'); 
-
-% Create colormaps
-edges = [0 .000000001 .001 .1 1];
-Cstart = [
-    0.25 .5 0.25;      % light green
-    1 1 .2;            % green
-    1.00 0.60 0.00;    % yellow
-    0.80 0.00 0.80;    % orange
-];
-Cend = [
-    0.00 0.60 0.00;    % green
-    1.00 0.60 0.00;    % yellow
-    1.00 0.00 0.00;    % orange
-    0 0 0;             % red
-];
-cmap_I = stackedColormap(edges, Cstart, Cend, 256, [1 1 1 1]);
-cmap_R = stackedColormap(edges, Cstart, Cend, 256, [1 1 1 1]);
-
-% Create 2x2 layout
-T = tiledlayout(2,2,'TileSpacing','compact','Padding','compact');
-
-% Initialize plots
-axv1 = nexttile(T,1);
-    h1 = scatter(axv1, locations(:,1), locations(:,2), 7, TIP(1,:)', 'filled');
-    colormap(axv1, cmap_I);
-    clim([0 .01]);
-    c1 = colorbar(axv1);
-    axis equal
-    
-axv2 = nexttile(T,2);
-    h2 = scatter(axv2, locations(:,1), locations(:,2), 7, TIP(1,:)'./N_site(:), 'filled');
-    colormap(axv2, cmap_I);
-    clim([0 .01]);
-    c2 = colorbar(axv2);
-    axis equal 
-    
-axv3 = nexttile(T,3);
-    h3 = scatter(axv3, locations(:,1), locations(:,2), 7, N_site(:)-TSP(1,:)', 'filled');
-    c3 = colorbar(axv3);
-    clim([0 1]);
-    colormap(axv3, cmap_R)
-    axis equal
-    
-axv4 = nexttile(T,4);
-    h4 = scatter(axv4, locations(:,1), locations(:,2), 7, (N_site(:)-TSP(1,:)')./N_site(:), 'filled');
-    c4 = colorbar(axv4);
-    clim([0 1]);
-    colormap(axv4, cmap_R)
-    axis equal
-
-% Create video writer
-vidname = sprintf('DisVid_Diagnostic_thresh%d_scale%.1f_shape%.3f', ...
-                  export_thresh, flux_scale, flux_shape);
-v = VideoWriter(fullfile(seascapePath, vidname));
-v.FrameRate = 5;
-open(v);
-
-% Threshold for disease front boundary
-bthresh = 0.001; % 0.1% of bottom
-
-% Determine how many days actually simulated
-num_days = size(TIP, 1);
-fprintf('Creating movie for %d days of simulation\n', num_days);
-
-% Generate movie frames
-for k = 1:1:num_days
-    Dt = datetime(2019,1,1) + (tspan(1) + k - 2);  % Adjust for actual tspan start
-    
-    % Find sites with dead coral above threshold (disease front)
-    sick = TRP(k,:) >= bthresh;
-    if sum(sick) >= 3  % Need at least 3 points for boundary
-        dflocations = locations(sick,:);
-        try
-            df = boundary(dflocations(:,1), dflocations(:,2), 0.7);
-            draw_boundary = true;
-        catch
-            draw_boundary = false;  % Not enough points or other issue
-        end
-    else
-        draw_boundary = false;
-    end
-    
-    % Update plot 1: Disease prevalence - proportion of bottom
-    set(h1, 'CData', TIP(k,:)');
-    if draw_boundary
-        p1 = patch(axv1, dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
-                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
-    end
-    title(axv1, 'Disease prevalence - proportion of bottom', ...
-          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-    colormap(axv1, cmap_I);
-    clim([0 .01]);
-    axis equal
-
-    % Update plot 2: Disease prevalence - proportion of living coral
-    set(h2, 'CData', TIP(k,:)'./N_site(:));
-    if draw_boundary
-        p2 = patch(axv2, dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
-                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
-    end
-    title(axv2, 'Disease prevalence - proportion of living coral', ...
-          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-    colormap(axv2, cmap_I);
-    clim([0 .1]);
-    axis equal
-     
-    % Update plot 3: Total coral cover lost
-    set(h3, 'CData', (N_site(:)-TSP(k,:)'));
-    if draw_boundary
-        p3 = patch(axv3, dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
-                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
-    end
-    title(axv3, 'Total coral cover lost', ...
-          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-    clim([0 1]);
-    colormap(axv3, cmap_R)
-    axis equal
-
-    % Update plot 4: Proportion coral cover lost
-    set(h4, 'CData', (N_site(:)-TSP(k,:)')./N_site(:));
-    if draw_boundary
-        p4 = patch(axv4, dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
-                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
-    end
-    title(axv4, 'Proportion coral cover lost', ...
-          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-    clim([0 1]);
-    colormap(axv4, cmap_R)
-    axis equal
-    
-    % Capture frame and write to video
-    F = getframe(f);
-    writeVideo(v, F);
-
-    % Clean up patches for next frame
-    if draw_boundary
-        delete(p1)
-        delete(p2)
-        delete(p3)
-        delete(p4)
-    end
-    
-    % Progress indicator every 10 days
-    if mod(k, 10) == 0
-        fprintf('  Frame %d/%d\n', k, num_days);
-    end
-end
-
-close(v);
-fprintf('Movie saved as: %s.avi\n', vidname);
-
-
-
-
-%% Create static figure of final state
-
-fprintf('Creating static figure of final state...\n');
-
-% Find last valid timepoint (no NaN values)
-valid_times = find(all(~isnan(TIP), 2));
-if isempty(valid_times)
-    warning('No valid timepoints found!');
-else
-    last_valid = valid_times(end);
-    final_day = tspan(1) + last_valid - 1;
-    final_date = datetime(2019,1,1) + (final_day - 1);
-    
-    fprintf('Final valid timepoint: Day %d (%s)\n', final_day, string(final_date, 'dd-MMM-yyyy'));
-    
-    % Create static figure
-    fig_final = figure('Position', [50 50 1400 1000]);
-    T_final = tiledlayout(2,2,'TileSpacing','compact','Padding','compact');
-    title(T_final, sprintf('Final Disease State - Day %d (%s)', final_day, string(final_date, 'dd-MMM-yyyy')), ...
-          'FontSize', 16, 'FontWeight', 'bold');
-    
-    % Threshold for disease front boundary
-    bthresh = 0.001;
-    sick = TRP(last_valid,:) >= bthresh;
-    
-    % Try to compute boundary
-    if sum(sick) >= 3
-        dflocations = locations(sick,:);
-        try
-            df = boundary(dflocations(:,1), dflocations(:,2), 0.7);
-            has_boundary = true;
-        catch
-            has_boundary = false;
-        end
-    else
-        has_boundary = false;
-    end
-    
-    % Plot 1: Disease prevalence - proportion of bottom
-    nexttile(T_final, 1);
-    scatter(locations(:,1), locations(:,2), 7, TIP(last_valid,:)', 'filled');
-    if has_boundary
-        hold on;
-        patch(dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
-              'EdgeColor', 'r', 'FaceAlpha', 0.2, 'LineWidth', 2);
-        hold off;
-    end
-    colormap(gca, cmap_I);
-    clim([0 .01]);
-    colorbar;
-    title('Disease prevalence - proportion of bottom');
-    axis equal;
-    
-    % Plot 2: Disease prevalence - proportion of living coral
-    nexttile(T_final, 2);
-    scatter(locations(:,1), locations(:,2), 7, TIP(last_valid,:)'./N_site(:), 'filled');
-    if has_boundary
-        hold on;
-        patch(dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
-              'EdgeColor', 'r', 'FaceAlpha', 0.2, 'LineWidth', 2);
-        hold off;
-    end
-    colormap(gca, cmap_I);
-    clim([0 .1]);
-    colorbar;
-    title('Disease prevalence - proportion of living coral');
-    axis equal;
-    
-    % Plot 3: Total coral cover lost
-    nexttile(T_final, 3);
-    scatter(locations(:,1), locations(:,2), 7, N_site(:)-TSP(last_valid,:)', 'filled');
-    if has_boundary
-        hold on;
-        patch(dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
-              'EdgeColor', 'r', 'FaceAlpha', 0.2, 'LineWidth', 2);
-        hold off;
-    end
-    colormap(gca, cmap_R);
-    clim([0 1]);
-    colorbar;
-    title('Total coral cover lost');
-    axis equal;
-    
-    % Plot 4: Proportion coral cover lost
-    nexttile(T_final, 4);
-    scatter(locations(:,1), locations(:,2), 7, (N_site(:)-TSP(last_valid,:)')./N_site(:), 'filled');
-    if has_boundary
-        hold on;
-        patch(dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
-              'EdgeColor', 'r', 'FaceAlpha', 0.2, 'LineWidth', 2);
-        hold off;
-    end
-    colormap(gca, cmap_R);
-    clim([0 1]);
-    colorbar;
-    title('Proportion coral cover lost');
-    axis equal;
-    
-    % Save figure
-    figname = sprintf('FinalState_Diagnostic_day%d_thresh%d_scale%.1f_shape%.3f', ...
-                      final_day, export_thresh, flux_scale, flux_shape);
-    saveas(fig_final, fullfile(seascapePath, [figname '.png']));
-    saveas(fig_final, fullfile(seascapePath, [figname '.fig']));
-    
-    fprintf('Static figure saved as: %s\n', figname);
-    
-    % Summary statistics
-    fprintf('\n=== FINAL STATE SUMMARY ===\n');
-    fprintf('Sites with any infection: %d (%.1f%%)\n', ...
-            sum(TIP(last_valid,:) > 0), 100*sum(TIP(last_valid,:) > 0)/num_sites);
-    fprintf('Sites with >0.1%% cover lost: %d (%.1f%%)\n', ...
-            sum(TRP(last_valid,:) > 0.001), 100*sum(TRP(last_valid,:) > 0.001)/num_sites);
-    fprintf('Total coral cover lost: %.4f (%.2f%% of initial)\n', ...
-            sum(TRP(last_valid,:)), 100*sum(TRP(last_valid,:))/sum(N_site));
-    fprintf('Max site-level cover lost: %.4f\n', max(TRP(last_valid,:)));
-    fprintf('Mean cover lost (diseased sites only): %.4f\n', ...
-            mean(TRP(last_valid, TRP(last_valid,:) > 0)));
-    fprintf('===========================\n\n');
-end
-
-
-
-
-
-
-
-
-% SHART
-
-
-
-
-
-
-%% Flux Distance Diagnostic
-
-fprintf('\n=== FLUX vs DISTANCE DIAGNOSTIC ===\n');
-
-% Get disease pool at day 30 (or closest available)
-day30_idx = find(t >= 30, 1, 'first');
-if isempty(day30_idx)
-    % Use last available day if didn't reach 30
-    day30_idx = length(t);
-    actual_day = t(day30_idx);
-    fprintf('Using day %.1f (simulation did not reach day 30)\n', actual_day);
-else
-    actual_day = 30;
-end
-
-P_day30 = Y(day30_idx, 3*num_sites+1:4*num_sites) + ...
-          Y(day30_idx, 4*num_sites+1:5*num_sites) + ...
-          Y(day30_idx, 5*num_sites+1:6*num_sites);
-P_day30 = P_day30(:);
-
-% Calculate flux at day 30
-conn_idx_day30 = max(1, find(conn_days <= actual_day, 1, 'last'));
-flux_day30 = incomingRisk_sparse(conn_structs(conn_idx_day30).full, P_day30, 0, 'rowsAreSources');
-
-% Calculate distances from seed sites (in km)
-seed_locations = locations(flat_cay_site_IDs, :);
-distances_km = min(pdist2(locations, seed_locations), [], 2) / 1000; % Convert to km
-
-% Distance bins to check (in km)
-dist_bins = [2.5, 5, 7.5, 10, 20];
-bin_width = 2.5; % +/- km tolerance
-
-fprintf('\nFlux values at Day %.1f by distance from seed sites:\n', actual_day);
-fprintf('Distance | N sites | Median flux | Mean flux | Max flux | Sites w/ flux>0\n');
-fprintf('---------|---------|-------------|-----------|----------|----------------\n');
-
-for dist = dist_bins
-    % Find sites within distance bin
-    sites_in_bin = find(abs(distances_km - dist) < bin_width);
-    
-    if isempty(sites_in_bin)
-        fprintf('%6.1f km | %7d | %11s | %9s | %8s | %14s\n', ...
-                dist, 0, 'N/A', 'N/A', 'N/A', 'N/A');
-        continue;
-    end
-    
-    % Get flux values for these sites
-    flux_in_bin = flux_day30(sites_in_bin);
-    
-    % Calculate statistics
-    n_sites = length(sites_in_bin);
-    median_flux = median(flux_in_bin);
-    mean_flux = mean(flux_in_bin);
-    max_flux = max(flux_in_bin);
-    n_nonzero = sum(flux_in_bin > 0);
-    
-    fprintf('%6.1f km | %7d | %11.6f | %9.6f | %8.6f | %8d (%4.1f%%)\n', ...
-            dist, n_sites, median_flux, mean_flux, max_flux, n_nonzero, 100*n_nonzero/n_sites);
-end
-
-% Also check at seed sites themselves
-fprintf('\nAt seed sites (n=%d):\n', length(flat_cay_site_IDs));
-fprintf('  P values: min=%.6f, median=%.6f, max=%.6f\n', ...
-        min(P_day30(flat_cay_site_IDs)), median(P_day30(flat_cay_site_IDs)), max(P_day30(flat_cay_site_IDs)));
-fprintf('  Flux values: min=%.6f, median=%.6f, max=%.6f\n', ...
-        min(flux_day30(flat_cay_site_IDs)), median(flux_day30(flat_cay_site_IDs)), max(flux_day30(flat_cay_site_IDs)));
-
-% Calculate what I0 threshold would allow outbreak at each distance
-fprintf('\n--- Threshold Analysis ---\n');
-fprintf('For outbreak via external flux alone:\n');
-fprintf('  At equilibrium: I = (beta * flux * S) / gamma\n');
-fprintf('  For I/N = I0: flux > (I0 * gamma) / beta\n\n');
-
-for group_idx = 1:3
-    if group_idx == 1
-        group_name = "LS"; b = b_LS; g = g_LS;
-    elseif group_idx == 2
-        group_name = "MS"; b = b_MS; g = g_MS;
-    else
-        group_name = "HS"; b = b_HS; g = g_HS;
-    end
-    
-    fprintf('%s group (beta=%.3f, gamma=%.3f):\n', group_name, b, g);
-    for I0_test = [0.0001, 0.0005, 0.001, 0.005, 0.01]
-        flux_needed = (I0_test * g) / b;
-        fprintf('  I0 = %.4f (%.2f%%) requires flux > %.6f\n', I0_test, I0_test*100, flux_needed);
-    end
-    fprintf('\n');
-end
-
-fprintf('===================================\n\n');
-
-
-
-
-
-%% Parameter sweep for parameter optimization
-
-export_thresh_vec = .0001:.0002:.0009;
-flux_shape_vec = -4:2:4;
+threshvec = .0001:.0002:.0009;
+shapeParamVec = -4:2:4;
 
 if RUN_PARAMETER_SWEEP
     count = 0;
     Results = struct();
 
     fprintf('\n========================================\n');
-    fprintf('PARAMETER SWEEP: Testing %d combinations\n', length(export_thresh_vec) * length(flux_shape_vec));
-    fprintf('  Thresholds: %d values from %.4f to %.4f\n', length(export_thresh_vec), min(export_thresh_vec), max(export_thresh_vec));
-    fprintf('  ShapeParams: %d values from %d to %d\n', length(flux_shape_vec), min(flux_shape_vec), max(flux_shape_vec));
+    fprintf('PARAMETER SWEEP: Testing %d combinations\n', length(threshvec)*length(shapeParamVec));
+    fprintf('  Thresholds: %d values from %.4f to %.4f\n', length(threshvec), min(threshvec), max(threshvec));
+    fprintf('  ShapeParams: %d values from %d to %d\n', length(shapeParamVec), min(shapeParamVec), max(shapeParamVec));
     if USE_PARALLEL
         fprintf('  Mode: PARALLEL (using %d workers)\n', min(6, feature('numcores')));
     else
@@ -903,35 +322,33 @@ if RUN_PARAMETER_SWEEP
             parpool('local', min(6, feature('numcores'))); % Use up to 6 cores
         end
         
-        total_combos = length(export_thresh_vec) * length(flux_shape_vec);
-        Results(total_combos).export_thresh = [];  % Pre-allocate struct array
+        total_combos = length(threshvec)*length(shapeParamVec);
+        Results(total_combos).thresh = [];  % Pre-allocate struct array
         
         tic
-
         parfor combo = 1:total_combos
-
-            [tv, sv] = ind2sub([length(export_thresh_vec), length(flux_shape_vec)], combo);
+            [tv, sv] = ind2sub([length(threshvec), length(shapeParamVec)], combo);
             
-            fprintf('  [%d/%d] Running: thresh=%.4f, flux_shape=%d\n', ...
-                    combo, total_combos, export_thresh_vec(tv), flux_shape_vec(sv));
+            fprintf('  [%d/%d] Running: thresh=%.4f, shapeParam=%d\n', ...
+                    combo, total_combos, threshvec(tv), shapeParamVec(sv));
             
-            Y0_par = [S_LS_init; S_MS_init; S_HS_init; I_LS_init; I_MS_init; I_HS_init; R_LS_init; R_MS_init; R_HS_init];
+            Y0_par = [SLS1;SMS1;SHS1;ILS1;IMS1;IHS1;RLS1;RMS1;RHS1];
             tspan_par = tspan_final;  % Use adjusted tspan
             
-            [t_par,Y_par] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh_vec(tv),flux_scale,flux_shape_vec(sv),num_sites,conn_structs,conn_days), tspan_par, Y0_par);
+            [t_par,Y_par] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,CLS1,CMS1,CHS1,bls,bms,bhs,kls,kms,khs,threshvec(tv),c,shapeParamVec(sv),habs,P,Pdays), tspan_par, Y0_par);
             
             % Extract and interpolate results
-            LSHP = Y_par(:,1:num_sites);
-            MSHP = Y_par(:,num_sites+1:num_sites*2);
-            HSHP = Y_par(:,2*num_sites+1:num_sites*3);
+            LSHP = Y_par(:,1:habs);
+            MSHP = Y_par(:,habs+1:habs*2);
+            HSHP = Y_par(:,2*habs+1:habs*3);
             
-            LSIP = Y_par(:,3*num_sites+1:num_sites*4);
-            MSIP = Y_par(:,4*num_sites+1:num_sites*5);
-            HSIP = Y_par(:,5*num_sites+1:num_sites*6);
+            LSIP = Y_par(:,3*habs+1:habs*4);
+            MSIP = Y_par(:,4*habs+1:habs*5);
+            HSIP = Y_par(:,5*habs+1:habs*6);
             
-            LSRP = Y_par(:,6*num_sites+1:num_sites*7);
-            MSRP = Y_par(:,7*num_sites+1:num_sites*8);
-            HSRP = Y_par(:,8*num_sites+1:num_sites*9);
+            LSRP = Y_par(:,6*habs+1:habs*7);
+            MSRP = Y_par(:,7*habs+1:habs*8);
+            HSRP = Y_par(:,8*habs+1:habs*9);
             
             interpLSHP = max(0, interp1(t_par,LSHP,tspan_par(1):tspan_par(2)));
             interpMSHP = max(0, interp1(t_par,MSHP,tspan_par(1):tspan_par(2)));
@@ -945,8 +362,8 @@ if RUN_PARAMETER_SWEEP
             interpMSRP = max(0, interp1(t_par,MSRP,tspan_par(1):tspan_par(2)));
             interpHSRP = max(0, interp1(t_par,HSRP,tspan_par(1):tspan_par(2)));
             
-            Results(combo).export_thresh = export_thresh_vec(tv);
-            Results(combo).flux_shape = flux_shape_vec(sv);
+            Results(combo).thresh = threshvec(tv);
+            Results(combo).shapeParam = shapeParamVec(sv);
             Results(combo).LSS = interpLSHP;
             Results(combo).MSS = interpMSHP;
             Results(combo).HSS = interpHSHP;
@@ -956,46 +373,43 @@ if RUN_PARAMETER_SWEEP
             Results(combo).LSR = interpLSRP;
             Results(combo).MSR = interpMSRP;
             Results(combo).HSR = interpHSRP;
-
         end
-
         total_time = toc;
         count = length(Results);  % Get actual count from Results array
         
     else
-
         % Serial execution (original code)
         tic
-        for tv = 1:length(export_thresh_vec)
-            fprintf('--- Threshold %d/%d (%.4f) ---\n', tv, length(export_thresh_vec), export_thresh_vec(tv));
+        for tv = 1:length(threshvec)
+            fprintf('--- Threshold %d/%d (%.4f) ---\n', tv, length(threshvec), threshvec(tv));
             
-            for sv = 1:length(flux_shape_vec)
-                count = count + 1;
-                fprintf('  [%d/%d] Running: thresh=%.4f, flux_shape=%d ... ', ...
-                        count, length(export_thresh_vec)*length(flux_shape_vec), export_thresh_vec(tv), flux_shape_vec(sv));
+            for sv = 1:length(shapeParamVec)
+                count = count+1;
+                fprintf('  [%d/%d] Running: thresh=%.4f, shapeParam=%d ... ', ...
+                        count, length(threshvec)*length(shapeParamVec), threshvec(tv), shapeParamVec(sv));
                 
                 run_start = tic;
 
-                Y0 = [S_LS_init; S_MS_init; S_HS_init; I_LS_init; I_MS_init; I_HS_init; R_LS_init; R_MS_init; R_HS_init]; 
+                Y0 = [SLS1;SMS1;SHS1;ILS1;IMS1;IHS1;RLS1;RMS1;RHS1]; 
                 opts  = odeset('OutputFcn', @odeWaitbar);
                 tspan_sweep = tspan_final;  % Use adjusted tspan
                 clear Y t
                 
-                [t,Y] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh_vec(tv),flux_scale,flux_shape_vec(sv),num_sites,conn_structs,conn_days), tspan_sweep, Y0, opts);
+                [t,Y] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,CLS1,CMS1,CHS1,bls,bms,bhs,kls,kms,khs,threshvec(tv),c,shapeParamVec(sv),habs,P,Pdays), tspan_sweep, Y0, opts);
                 
                 fprintf('Done (%.1f sec)\n', toc(run_start));
 
-                LSHP = Y(:,1:num_sites);
-                MSHP = Y(:,num_sites+1:num_sites*2);
-                HSHP = Y(:,2*num_sites+1:num_sites*3);
+                LSHP = Y(:,1:habs);
+                MSHP = Y(:,habs+1:habs*2);
+                HSHP = Y(:,2*habs+1:habs*3);
                 
-                LSIP = Y(:,3*num_sites+1:num_sites*4);
-                MSIP = Y(:,4*num_sites+1:num_sites*5);
-                HSIP = Y(:,5*num_sites+1:num_sites*6);
+                LSIP = Y(:,3*habs+1:habs*4);
+                MSIP = Y(:,4*habs+1:habs*5);
+                HSIP = Y(:,5*habs+1:habs*6);
                 
-                LSRP = Y(:,6*num_sites+1:num_sites*7);
-                MSRP = Y(:,7*num_sites+1:num_sites*8);
-                HSRP = Y(:,8*num_sites+1:num_sites*9);
+                LSRP = Y(:,6*habs+1:habs*7);
+                MSRP = Y(:,7*habs+1:habs*8);
+                HSRP = Y(:,8*habs+1:habs*9);
                 
                 interpLSHP = interp1(t,LSHP,tspan_sweep(1):tspan_sweep(2));
                 interpMSHP = interp1(t,MSHP,tspan_sweep(1):tspan_sweep(2));
@@ -1022,8 +436,8 @@ if RUN_PARAMETER_SWEEP
                 interpMSRP(interpMSRP<0) = 0;
                 interpHSRP(interpHSRP<0) = 0;
 
-                Results(count).export_thresh = export_thresh_vec(tv);
-                Results(count).flux_shape = flux_shape_vec(sv);
+                Results(count).thresh = threshvec(tv);
+                Results(count).shapeParam = shapeParamVec(sv);
                 Results(count).LSS = interpLSHP;
                 Results(count).MSS = interpMSHP;
                 Results(count).HSS = interpHSHP;
@@ -1035,31 +449,25 @@ if RUN_PARAMETER_SWEEP
                 Results(count).LSR = interpLSRP;
                 Results(count).MSR = interpMSRP;
                 Results(count).HSR = interpHSRP;
-
             end
-
             fprintf('\n');
-
         end
-
         total_time = toc;
         count = length(Results);
-
     end
             
     fprintf('========================================\n');
     fprintf('PARAMETER SWEEP COMPLETE\n');
     fprintf('  Total simulations: %d\n', count);
-    fprintf('  Total time: %.1f minutes (avg: %.1f sec per simulation)\n', total_time / 60, total_time / count);
+    fprintf('  Total time: %.1f minutes (avg: %.1f sec per simulation)\n', total_time/60, total_time/count);
     fprintf('========================================\n\n');
     
     % Save results
     fprintf('Saving parameter sweep results to temp/ParameterSweep_Results.mat...\n');
-    save(fullfile(tempPath, 'ParameterSweep_Results.mat'), 'Results', 'export_thresh_vec', 'flux_shape_vec', '-v7.3');
+    save(fullfile(tempPath, 'ParameterSweep_Results.mat'), 'Results', 'threshvec', 'shapeParamVec', '-v7.3');
     fprintf('Saved successfully.\n\n');
     
 else
-
     % Load pre-calculated sweep results
     fprintf('\n========================================\n');
     fprintf('Loading cached parameter sweep results from temp/ParameterSweep_Results.mat...\n');
@@ -1069,10 +477,9 @@ else
                'Set RUN_PARAMETER_SWEEP = true to generate it.']);
     end
     
-    load(fullfile(tempPath, 'ParameterSweep_Results.mat'), 'Results', 'export_thresh_vec', 'flux_shape_vec');
+    load(fullfile(tempPath, 'ParameterSweep_Results.mat'), 'Results', 'threshvec', 'shapeParamVec');
     fprintf('COMPLETE: Loaded %d parameter combinations from cache\n', length(Results));
     fprintf('========================================\n\n');
-
 end
 
 %% Visualize parameter sweep results - 5x5 comparison grid
@@ -1083,23 +490,23 @@ end
 %     RTIP = Results(i).LSI + Results(i).MSI + Results(i).HSI;
 %     nexttile(T,i)
 %     plot(RTIP)
-%     title(strcat('thresh = ',num2str(Results(i).thresh),', flux_shape = ',num2str(Results(i).flux_shape)))
+%     title(strcat('thresh = ',num2str(Results(i).thresh),', shapeParam = ',num2str(Results(i).shapeParam)))
 % end
 
 %% Interpolate results from manual run for movie generation
 % The output from the solver is not in days, but is in unequal time steps.
 % You need to interpolate back to days..
-LSHP = Y(:,1:num_sites);
-MSHP = Y(:,num_sites+1:num_sites*2);
-HSHP = Y(:,2*num_sites+1:num_sites*3);
+LSHP = Y(:,1:habs);
+MSHP = Y(:,habs+1:habs*2);
+HSHP = Y(:,2*habs+1:habs*3);
 
-LSIP = Y(:,3*num_sites+1:num_sites*4);
-MSIP = Y(:,4*num_sites+1:num_sites*5);
-HSIP = Y(:,5*num_sites+1:num_sites*6);
+LSIP = Y(:,3*habs+1:habs*4);
+MSIP = Y(:,4*habs+1:habs*5);
+HSIP = Y(:,5*habs+1:habs*6);
 
-LSRP = Y(:,6*num_sites+1:num_sites*7);
-MSRP = Y(:,7*num_sites+1:num_sites*8);
-HSRP = Y(:,8*num_sites+1:num_sites*9);
+LSRP = Y(:,6*habs+1:habs*7);
+MSRP = Y(:,7*habs+1:habs*8);
+HSRP = Y(:,8*habs+1:habs*9);
 
 interpLSHP = interp1(t,LSHP,tspan(1):tspan(2));
 interpMSHP = interp1(t,MSHP,tspan(1):tspan(2));
@@ -1126,85 +533,13 @@ interpLSRP(interpLSRP<0) = 0;
 interpMSRP(interpMSRP<0) = 0;
 interpHSRP(interpHSRP<0) = 0;
 
-% TIP = interpLSIP + interpMSIP + interpHSIP;
-% TSP = interpLSHP + interpMSHP + interpHSHP;
-% TRP = interpLSRP + interpMSRP + interpHSRP;
-
-
-
-%% DIAGNOSTICS - FULL SIR AT SEED SITES
-
-figure;
-subplot(2,1,1);
-I_total_at_seeds = interpLSIP(:, flat_cay_site_IDs) + interpMSIP(:, flat_cay_site_IDs) + interpHSIP(:, flat_cay_site_IDs);
-plot(I_total_at_seeds, 'LineWidth', 1.5);
-xlabel('Day');
-ylabel('Infected coral cover');
-title('Infection trajectory at seed sites');
-legend(arrayfun(@(x) sprintf('Site %d', unique_IDs(x)), flat_cay_site_IDs, 'UniformOutput', false));
-grid on;
-
-subplot(2,1,2);
-P_at_seeds = interpLSIP(:,flat_cay_site_IDs) + interpMSIP(:,flat_cay_site_IDs) + interpHSIP(:,flat_cay_site_IDs);
-plot(P_at_seeds, 'LineWidth', 1.5);
-xlabel('Day');
-ylabel('Disease pool (P)');
-title('Disease pool at seed sites');
-yline(export_thresh, 'r--', 'LineWidth', 2, 'Label', 'Export threshold');
-grid on;
-
-
-
-figure('Position', [100 100 1400 800]);
-
-% Pick first seed site as example
-example_site = flat_cay_site_IDs(1);
-
-subplot(2,2,1);
-plot(interpLSHP(:,example_site), 'b', 'LineWidth', 1.5); hold on;
-plot(interpLSIP(:,example_site), 'r', 'LineWidth', 1.5);
-plot(interpLSRP(:,example_site), 'k', 'LineWidth', 1.5);
-xlabel('Day'); ylabel('Cover');
-title(sprintf('LS Group - Site %d', unique_IDs(example_site)));
-legend('S','I','R');
-grid on;
-
-subplot(2,2,2);
-plot(interpMSHP(:,example_site), 'b', 'LineWidth', 1.5); hold on;
-plot(interpMSIP(:,example_site), 'r', 'LineWidth', 1.5);
-plot(interpMSRP(:,example_site), 'k', 'LineWidth', 1.5);
-xlabel('Day'); ylabel('Cover');
-title(sprintf('MS Group - Site %d', unique_IDs(example_site)));
-legend('S','I','R');
-grid on;
-
-subplot(2,2,3);
-plot(interpHSHP(:,example_site), 'b', 'LineWidth', 1.5); hold on;
-plot(interpHSIP(:,example_site), 'r', 'LineWidth', 1.5);
-plot(interpHSRP(:,example_site), 'k', 'LineWidth', 1.5);
-xlabel('Day'); ylabel('Cover');
-title(sprintf('HS Group - Site %d', unique_IDs(example_site)));
-legend('S','I','R');
-grid on;
-
-subplot(2,2,4);
-total_S = interpLSHP(:,example_site) + interpMSHP(:,example_site) + interpHSHP(:,example_site);
-total_I = interpLSIP(:,example_site) + interpMSIP(:,example_site) + interpHSIP(:,example_site);
-total_R = interpLSRP(:,example_site) + interpMSRP(:,example_site) + interpHSRP(:,example_site);
-plot(total_S, 'b', 'LineWidth', 1.5); hold on;
-plot(total_I, 'r', 'LineWidth', 1.5);
-plot(total_R, 'k', 'LineWidth', 1.5);
-xlabel('Day'); ylabel('Cover');
-title(sprintf('Total - Site %d', unique_IDs(example_site)));
-legend('S','I','R');
-grid on;
-
-
-
+TIP = interpLSIP + interpMSIP + interpHSIP;
+TSP = interpLSHP + interpMSHP + interpHSHP;
+TRP = interpLSRP + interpMSRP + interpHSRP;
 
 %% Make results into a movie - spatial visualization of disease spread
 
-% Use Results(6) as example: thresh=0.0003, flux_shape=-4
+% Use Results(6) as example: thresh=0.0003, shapeParam=-4
 TIP = Results(6).LSI + Results(6).MSI + Results(6).HSI;
 TSP = Results(6).LSS + Results(6).MSS + Results(6).HSS;
 TRP = Results(6).LSR + Results(6).MSR + Results(6).HSR;
@@ -1215,7 +550,7 @@ set(f,'nextplot','replacechildren');
 % Create colormaps for infection (I) and recovery/dead (R)
 cmap3 = colormap(flipud(autumn(round(max(max(TIP))*1000000)+1)));
 cmap3(1,:) = [0 .3 1];
-cmap4 = colormap(cool(round(max(N_site)*1000)+1));
+cmap4 = colormap(cool(round(max(CC)*1000)+1));
 cmap4(1,:) = [0 .3 1];
 
 edges = [0 .000000001 .001 .1 1];
@@ -1239,28 +574,28 @@ T = tiledlayout(2,2,'TileSpacing','compact','Padding','compact');
 
 % Initialize plots
 axv1 = nexttile(T,1);
-    h1 = scatter(axv1, locations(:,1),locations(:,2),7,TIP(1,:)','filled');
+    h1 = scatter(axv1, XY(:,1),XY(:,2),7,TIP(1,:)','filled');
     colormap(axv1,cmap_I);
     clim([0 .01]);
     c1 = colorbar(axv1);
     axis equal
     
 axv2 = nexttile(T,2);
-    h2 = scatter(axv2, locations(:,1),locations(:,2),7,TIP(1,:)'./N_site(:),'filled');
+    h2 = scatter(axv2, XY(:,1),XY(:,2),7,TIP(1,:)'./CC(:),'filled');
     colormap(axv2,cmap_I);
     clim([0 .01]);
     c2 = colorbar(axv2);
     axis equal 
     
 axv3 = nexttile(T,3);
-    h3 = scatter(axv3, locations(:,1),locations(:,2),7,N_site(:)-TSP(1,:)','filled');
+    h3 = scatter(axv3, XY(:,1),XY(:,2),7,CC(:)-TSP(1,:)','filled');
     c3 = colorbar(axv3);
     clim([0 1]);
     colormap(axv3,cmap_R)
     axis equal
     
 axv4 = nexttile(T,4);
-    h4 = scatter(axv4, locations(:,1),locations(:,2),7,(N_site(:)-TSP(1,:)')./N_site(:),'filled');
+    h4 = scatter(axv4, XY(:,1),XY(:,2),7,(CC(:)-TSP(1,:)')./CC(:),'filled');
     c4 = colorbar(axv4);
     clim([0 1]);
     colormap(axv4,cmap_R)
@@ -1280,40 +615,40 @@ for k = 1:1:size(TIP,1)
     
     % Find sites with dead coral above threshold (disease front)
     sick = TRP(k,:) >= bthresh;
-    dflocations = locations(sick,:);
-    df = boundary(dflocations(:,1),dflocations(:,2),0.7);
+    dfXY = XY(sick,:);
+    df = boundary(dfXY(:,1),dfXY(:,2),0.7);
     
     % Update plot 1: Disease prevalence - proportion of bottom
     set(h1, 'CData', TIP(k,:).');
-    p1 = patch(axv1,dflocations(df,1),dflocations(df,2),[.8 .9 1],'EdgeColor','r','FaceAlpha',0.2);
-    title(axv1,'Disease prevalence - proportion of bottom',strcat('t ='," ", string(Dt, 'dd-MMM-yyyy')));
+    p1 = patch(axv1,dfXY(df,1),dfXY(df,2),[.8 .9 1],'EdgeColor','r','FaceAlpha',0.2);
+    title(axv1,'Disease prevalence - proportion of bottom',strcat('t ='," ",datestr(Dt)));
     colormap(axv1,cmap_I);
     clim([0 .01]);
     c1 = colorbar(axv1);
     axis equal
 
     % Update plot 2: Disease prevalence - proportion of living coral
-    set(h2, 'CData', TIP(k,:).'./N_site(:));
-    p2 = patch(axv2, dflocations(df, 1), dflocations(df, 2), [.8 .9 1], 'EdgeColor', 'r', 'FaceAlpha', 0.2);
-    title(axv2,'Disease prevalence - proportion of living coral',strcat('t ='," ", string(Dt), 'dd-MMM-yyyy'));
+    set(h2, 'CData', TIP(k,:).'./CC(:));
+    p2 = patch(axv2,dfXY(df,1),dfXY(df,2),[.8 .9 1],'EdgeColor','r','FaceAlpha',0.2);
+    title(axv2,'Disease prevalence - proportion of living coral',strcat('t ='," ",datestr(Dt)));
     colormap(axv2,cmap_I);
     clim([0 .1]);
     c2 = colorbar(axv2);
     axis equal
      
     % Update plot 3: Total coral cover lost
-    set(h3, 'CData',(N_site(:)-TSP(k,:).'));
-    p3 = patch(axv3,dflocations(df,1),dflocations(df,2),[.8 .9 1],'EdgeColor','r','FaceAlpha',0.2);
-    title(axv3,'Total coral cover lost',strcat('t ='," ", string(Dt), 'dd-MMM-yyyy'));
+    set(h3, 'CData',(CC(:)-TSP(k,:).'));
+    p3 = patch(axv3,dfXY(df,1),dfXY(df,2),[.8 .9 1],'EdgeColor','r','FaceAlpha',0.2);
+    title(axv3,'Total coral cover lost',strcat('t ='," ",datestr(Dt)));
     c3 = colorbar(axv3);
     clim([0 1]);
     colormap(axv3,cmap_R)
     axis equal
 
     % Update plot 4: Proportion coral cover lost
-    set(h4, 'CData',(N_site(:)-TSP(k,:).')./N_site(:));
-    p4 = patch(axv4,dflocations(df,1),dflocations(df,2),[.8 .9 1],'EdgeColor','r','FaceAlpha',0.2);
-    title(axv4,'Proportion coral cover lost',strcat('t ='," ", string(Dt), 'dd-MMM-yyyy'));
+    set(h4, 'CData',(CC(:)-TSP(k,:).')./CC(:));
+    p4 = patch(axv4,dfXY(df,1),dfXY(df,2),[.8 .9 1],'EdgeColor','r','FaceAlpha',0.2);
+    title(axv4,'Proportion coral cover lost',strcat('t ='," ",datestr(Dt)));
     c4 = colorbar(axv4);
     clim([0 1]);
     colormap(axv4,cmap_R)
@@ -1343,7 +678,7 @@ close(v);
 % fprintf('\n========================================\n');
 % fprintf('Visualizing SIR dynamics for Result #%d\n', resultIndex);
 % fprintf('  Threshold: %.4f\n', Results(resultIndex).thresh);
-% fprintf('  ShapeParam: %d\n', Results(resultIndex).flux_shape);
+% fprintf('  ShapeParam: %d\n', Results(resultIndex).shapeParam);
 % fprintf('========================================\n\n');
 % 
 % % Extract data for selected result
@@ -1352,7 +687,7 @@ close(v);
 % TRP_selected = Results(resultIndex).LSR + Results(resultIndex).MSR + Results(resultIndex).HSR;
 % 
 % % Calculate total coral removal at each site (final - initial)
-% totalRemoval = N_site' - TSP_selected(end,:);
+% totalRemoval = CC' - TSP_selected(end,:);
 % 
 % % Find sites with highest removal
 % [sortedRemoval, siteIndices] = sort(totalRemoval, 'descend');
@@ -1361,8 +696,8 @@ close(v);
 % % Create figure with subplots for each top site
 % fig = figure('Position', [100 100 1400 900]);
 % T = tiledlayout(ceil(numSitesToShow/2), 2, 'TileSpacing', 'compact', 'Padding', 'compact');
-% title(T, sprintf('SIR Dynamics at Top %d Most Affected Sites - Result #%d (thresh=%.4f, flux_shape=%d)', ...
-%     numSitesToShow, resultIndex, Results(resultIndex).thresh, Results(resultIndex).flux_shape), ...
+% title(T, sprintf('SIR Dynamics at Top %d Most Affected Sites - Result #%d (thresh=%.4f, shapeParam=%d)', ...
+%     numSitesToShow, resultIndex, Results(resultIndex).thresh, Results(resultIndex).shapeParam), ...
 %     'FontSize', 14, 'FontWeight', 'bold');
 % 
 % % Time vector (days)
@@ -1387,16 +722,16 @@ close(v);
 %     plot(days, R, 'k-', 'LineWidth', 2, 'DisplayName', 'Removed (R)');
 % 
 %     % Add initial coral cover reference line
-%     yline(N_site(siteIdx), 'g--', 'LineWidth', 1.5, 'DisplayName', 'Initial Cover', 'Alpha', 0.5);
+%     yline(CC(siteIdx), 'g--', 'LineWidth', 1.5, 'DisplayName', 'Initial Cover', 'Alpha', 0.5);
 % 
 %     % Formatting
 %     xlabel('Days from Jan 1, 2019');
 %     ylabel('Coral Cover Proportion');
 %     title(sprintf('Site #%d (ID: %d) - %.1f%% Loss', ...
-%         siteIdx, unique_IDs(siteIdx), 100*totalRemoval(siteIdx)/N_site(siteIdx)));
+%         siteIdx, unique_IDs(siteIdx), 100*totalRemoval(siteIdx)/CC(siteIdx)));
 %     legend('Location', 'best', 'FontSize', 8);
 %     grid on;
-%     ylim([0, max(N_site(siteIdx)*1.1, 0.01)]);
+%     ylim([0, max(CC(siteIdx)*1.1, 0.01)]);
 % 
 %     hold off;
 % end
@@ -1407,7 +742,7 @@ close(v);
 % fprintf('-----|-------|---------|---------------|-------------|---------|--------\n');
 % for i = 1:numSitesToShow
 %     siteIdx = topSites(i);
-%     initialCover = N_site(siteIdx);
+%     initialCover = CC(siteIdx);
 %     finalCover = TSP_selected(end, siteIdx);
 %     removal = totalRemoval(siteIdx);
 %     percentLoss = 100 * removal / initialCover;
@@ -1428,9 +763,9 @@ close(v);
 %     siteIdx = topSites(i);
 % 
 %     % Normalize by initial cover for comparison
-%     S_norm = TSP_selected(:, siteIdx) / N_site(siteIdx);
-%     I_norm = TIP_selected(:, siteIdx) / N_site(siteIdx);
-%     R_norm = TRP_selected(:, siteIdx) / N_site(siteIdx);
+%     S_norm = TSP_selected(:, siteIdx) / CC(siteIdx);
+%     I_norm = TIP_selected(:, siteIdx) / CC(siteIdx);
+%     R_norm = TRP_selected(:, siteIdx) / CC(siteIdx);
 % 
 %     % Plot with different line styles
 %     plot(days, S_norm, '-', 'Color', colors(i,:), 'LineWidth', 1.5, ...
@@ -1443,8 +778,8 @@ close(v);
 % 
 % xlabel('Days from Jan 1, 2019');
 % ylabel('Proportion of Initial Coral Cover');
-% title(sprintf('Normalized SIR Dynamics - Result #%d (thresh=%.4f, flux_shape=%d)', ...
-%     resultIndex, Results(resultIndex).thresh, Results(resultIndex).flux_shape));
+% title(sprintf('Normalized SIR Dynamics - Result #%d (thresh=%.4f, shapeParam=%d)', ...
+%     resultIndex, Results(resultIndex).thresh, Results(resultIndex).shapeParam));
 % legend('Location', 'eastoutside', 'FontSize', 8);
 % grid on;
 % ylim([0, 1.1]);
@@ -1467,8 +802,8 @@ close(v);
 % 
 % xlabel('Days from Jan 1, 2019');
 % ylabel('Infected Coral Cover Proportion');
-% title(sprintf('Infected Coral Time Series - Absolute Values\nResult #%d (thresh=%.4f, flux_shape=%d)', ...
-%     resultIndex, Results(resultIndex).thresh, Results(resultIndex).flux_shape));
+% title(sprintf('Infected Coral Time Series - Absolute Values\nResult #%d (thresh=%.4f, shapeParam=%d)', ...
+%     resultIndex, Results(resultIndex).thresh, Results(resultIndex).shapeParam));
 % legend('Location', 'best', 'FontSize', 9);
 % grid on;
 % hold off;
@@ -1479,7 +814,7 @@ close(v);
 % 
 % for i = 1:numSitesToShow
 %     siteIdx = topSites(i);
-%     I_norm = TIP_selected(:, siteIdx) / N_site(siteIdx);
+%     I_norm = TIP_selected(:, siteIdx) / CC(siteIdx);
 % 
 %     plot(days, I_norm, '-', 'Color', colors(i,:), 'LineWidth', 2, ...
 %         'DisplayName', sprintf('Site %d (ID: %d)', siteIdx, unique_IDs(siteIdx)));
@@ -1588,7 +923,7 @@ close(v);
 %     siteIdx = topSites(i);
 %     fprintf('%5d | %7d | %8d | %6.4f | %9.4f | %11.4f\n', ...
 %         siteIdx, unique_IDs(siteIdx), peakTimes(i), peakValues(i), ...
-%         peakValues(i)/N_site(siteIdx), cumBurden(i));
+%         peakValues(i)/CC(siteIdx), cumBurden(i));
 % end
 % fprintf('\n');
 % 
@@ -1633,12 +968,12 @@ close(v);
 % 
 % %% Parameters (using same values from your main script)
 % % These are already defined in your environment, but listed here for clarity
-% % b_LS = 0.03;
-% % b_MS = 0.14;
-% % b_HS = 2.08;
-% % g_LS = 0.05;
-% % g_MS = 0.55;
-% % g_HS = 3.33;
+% % bls = 0.03;
+% % bms = 0.14;
+% % bhs = 2.08;
+% % kls = 0.05;
+% % kms = 0.55;
+% % khs = 3.33;
 % 
 % % Time span for local simulations
 % tspan_local = [0 365];  % 365 days
@@ -1703,23 +1038,23 @@ close(v);
 %     % Create connectivity structure for single isolated site
 %     P_dummy(1).full = sparse(1, 1, 0);  % 1x1 matrix with zero connectivity
 %     P_dummy(1).Date = datetime(2019,1,1);
-%     conn_days_dummy = [0];  % Single time point
+%     Pdays_dummy = [0];  % Single time point
 % 
 %     % Critical parameters to nullify spatial transmission while keeping local:
 %     % - Set c = 0: This zeros out ALL external transmission (T becomes 0)
 %     % - High threshold ensures no transmission via connectivity anyway
-%     % - With c=0, the reshape function produces T=0 regardless of flux_shape
+%     % - With c=0, the reshape function produces T=0 regardless of shapeParam
 %     thresh_dummy = 1e10;     % Impossibly high threshold
 %     c_dummy = 0;              % Zero coefficient = no external transmission
-%     flux_shape_dummy = 0.001; % Doesn't matter when c=0
-%     num_sites_dummy = 1;           % Single site (no spatial structure)
+%     shapeParam_dummy = 0.001; % Doesn't matter when c=0
+%     habs_dummy = 1;           % Single site (no spatial structure)
 % 
 %     % Run using ODEfun_SCTLD_seascape with connectivity nullified
 %     [t_local, Y_local] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t, Y, ...
 %                                                              CLS_init, CMS_init, CHS_init, ...
-%                                                              b_LS, b_MS, b_HS, g_LS, g_MS, g_HS, ...
-%                                                              thresh_dummy, c_dummy, flux_shape_dummy, ...
-%                                                              num_sites_dummy, P_dummy, conn_days_dummy), ...
+%                                                              bls, bms, bhs, kls, kms, khs, ...
+%                                                              thresh_dummy, c_dummy, shapeParam_dummy, ...
+%                                                              habs_dummy, P_dummy, Pdays_dummy), ...
 %                                tspan_local, Y0_local);
 % 
 %     % Extract results
@@ -1766,7 +1101,7 @@ close(v);
 %     if s == 1  % Only print for first scenario to verify dummy setup
 %         fprintf('\n=== VERIFYING DUMMY CONDITIONS (SCENARIO 1) ===\n');
 %         fprintf('Setup ensures PURE within-site transmission:\n');
-%         fprintf('  - Single site (num_sites=1): no spatial neighbors\n');
+%         fprintf('  - Single site (habs=1): no spatial neighbors\n');
 %         fprintf('  - Connectivity matrix: 1x1 sparse with value 0\n');
 %         fprintf('  - c_dummy=0: External transmission T forced to zero\n');
 %         fprintf('  - thresh_dummy=1e10: Impossibly high for any transmission\n\n');
