@@ -1,3 +1,4 @@
+
 clear; clc
 
 %% setup
@@ -11,74 +12,14 @@ RECALCULATE_CONNECTIVITY = false;  % Set to false to load from temp/P.mat
 RUN_PARAMETER_SWEEP = true;        % Set to false to load from temp/ParameterSweep_Results.mat
 USE_PARALLEL = true;               % Set to true to use parallel computing (requires Parallel Computing Toolbox)
 
-% ===== NEW FILTERING TOGGLES =====
-FILTER_LOW_COVER = false;           % Remove sites with <1% total coral cover
-FILTER_MISSING_GROUPS = false;      % Remove sites with 0% in any susceptibility group
-% ==================================
-
 % DATE_RANGE = [];  % Empty = create/load all connectivity matrices
 % DATE_RANGE = [datetime(2019,1,1), datetime(2019,3,31)];  % just Q1
 DATE_RANGE = [datetime(2019,1,1), datetime(2019,6,30)];  % Q1-Q2
-% DATE_RANGE = [datetime(2019,1,1), datetime(2019,12,31)];  % Q1-Q4
 
 %% Load reef data from CSV
 
 reefDataFile = fullfile(dataPath, 'centroids_vertices_FINALFORCMS.csv');
 reefData = readtable(reefDataFile);
-
-fprintf('========================================\n');
-fprintf('INITIAL REEF DATA\n');
-fprintf('Total sites loaded: %d\n', height(reefData));
-fprintf('========================================\n\n');
-
-%% Apply site filtering
-
-% Store original indices before filtering
-reefData.original_index = (1:height(reefData))';
-sites_to_keep = true(height(reefData), 1);
-
-% Filter a) Sites with <1% coral cover
-if FILTER_LOW_COVER
-    low_cover_mask = reefData.mean_coral_cover < 0.01;
-    sites_removed_low = sum(low_cover_mask);
-    sites_to_keep = sites_to_keep & ~low_cover_mask;
-    
-    fprintf('========================================\n');
-    fprintf('FILTER A: Low Cover Sites (<1%%)\n');
-    fprintf('Sites removed: %d\n', sites_removed_low);
-    fprintf('Sites remaining: %d\n', sum(sites_to_keep));
-    fprintf('========================================\n\n');
-end
-
-% Filter b) Sites with 0% in any susceptibility group
-if FILTER_MISSING_GROUPS
-    missing_groups_mask = (reefData.low_coral_cover == 0) | ...
-                          (reefData.moderate_coral_cover == 0) | ...
-                          (reefData.high_coral_cover == 0);
-    sites_removed_missing = sum(missing_groups_mask & sites_to_keep);
-    sites_to_keep = sites_to_keep & ~missing_groups_mask;
-    
-    fprintf('========================================\n');
-    fprintf('FILTER B: Missing Susceptibility Groups\n');
-    fprintf('Sites removed: %d\n', sites_removed_missing);
-    fprintf('Sites remaining: %d\n', sum(sites_to_keep));
-    fprintf('========================================\n\n');
-end
-
-% Apply filter to reef data
-if FILTER_LOW_COVER || FILTER_MISSING_GROUPS
-    original_indices = reefData.original_index(sites_to_keep);
-    reefData = reefData(sites_to_keep, :);
-    
-    fprintf('========================================\n');
-    fprintf('FILTERING SUMMARY\n');
-    fprintf('Original sites: %d\n', length(sites_to_keep));
-    fprintf('Filtered sites: %d\n', height(reefData));
-    fprintf('Reduction: %.1f%%\n', 100 * (1 - height(reefData)/length(sites_to_keep)));
-    fprintf('========================================\n\n');
-else
-    original_indices = (1:height(reefData))';
-end
 
 % Extract reef information
 unique_IDs = reefData.unique_ID;
@@ -89,22 +30,14 @@ num_sites = height(reefData);
 
 % Generate connectivity (conn_structs) cache filename based on date range
 if ~isempty(DATE_RANGE)
-    cacheFilename = sprintf('conn_structs_%s_to_%s', ...
+    cacheFilename = sprintf('conn_structs_%s_to_%s.mat', ...
                            string(DATE_RANGE(1), 'yyyyMMdd'), ...
                            string(DATE_RANGE(2), 'yyyyMMdd'));
 else
-    cacheFilename = 'conn_structs';  % Full dataset
+    cacheFilename = 'conn_structs.mat';  % Full dataset
 end
-
-% Add filtering suffix to cache filename
-if FILTER_LOW_COVER || FILTER_MISSING_GROUPS
-    filter_suffix = '';
-    if FILTER_LOW_COVER; filter_suffix = [filter_suffix '_lowcov']; end
-    if FILTER_MISSING_GROUPS; filter_suffix = [filter_suffix '_missing']; end
-    cacheFilename = [cacheFilename filter_suffix];
-end
-cacheFilename = [cacheFilename '.mat'];
 cacheFilePath = fullfile(tempPath, cacheFilename);
+
 
 if RECALCULATE_CONNECTIVITY
     fprintf('========================================\n');
@@ -116,6 +49,7 @@ if RECALCULATE_CONNECTIVITY
     end
     fprintf('========================================\n\n');
     
+    % Pattern to match: connectivity_2019_[Date]_120000.mat
     quarters = {'Q1_2019', 'Q2_2019', 'Q3_2019', 'Q4_2019'};
     conn_structs = struct();
     connCount = 0;
@@ -128,19 +62,24 @@ if RECALCULATE_CONNECTIVITY
         fprintf('Processing quarter: %s\n', quarters{q});
         quarterPath = fullfile(outputPath, 'CMS_traj', quarters{q});
         
+        % Check if quarter folder exists
         if exist(quarterPath, 'dir') == 0
             warning('  --> Quarter folder not found: %s\n', quarterPath);
             continue;
         end
         
+        % Get all connectivity files in this quarter
         myFiles = dir(fullfile(quarterPath, 'connectivity_*.mat'));
         fprintf('  Found %d connectivity files\n', length(myFiles));
-        filesLoaded = 0;
+        
+        filesLoaded = 0;  % Track how many files actually loaded from this quarter
         
         for i = 1:length(myFiles)
             filename = myFiles(i).name;
             filenam = fullfile(quarterPath, filename);
             
+            % Parse date from filename (e.g., connectivity_2019_Mar26_120000.mat)
+            % Extract the date portion using regexp
             tokens = regexp(filename, 'connectivity_(\d{4})_(\w{3})(\d{2})_\d+\.mat', 'tokens');
             if ~isempty(tokens)
                 year_str = tokens{1}{1};
@@ -152,34 +91,35 @@ if RECALCULATE_CONNECTIVITY
                 continue;
             end
             
+            % Skip if outside date range
             if ~isempty(DATE_RANGE)
                 if Dat < DATE_RANGE(1) || Dat > DATE_RANGE(2)
-                    continue;
+                    continue;  % Skip this file without loading
                 end
             end
             
+            % File is in range - now load it
             connCount = connCount + 1;
             filesLoaded = filesLoaded + 1;
             fprintf('  [%d] Loading: %s (Date: %s)\n', connCount, filename, string(Dat, 'dd-MMM-yyyy'));
             
-            Con = load(filenam);
+            Con = load(filenam);  % Load full file now
+            
+            % Verify date matches (optional sanity check)
             Dat_actual = Con.connectivity_results.calendar_date;
             if abs(days(Dat - Dat_actual)) > 0.1
                 warning('Filename date mismatch: %s vs %s', string(Dat, 'dd-MMM-yyyy'), string(Dat_actual, 'dd-MMM-yyyy'));
+
             end
             
+            % Extract date information
             conn_structs(connCount).DY = day(Dat);
             conn_structs(connCount).MO = month(Dat);
             conn_structs(connCount).YR = year(Dat);
             conn_structs(connCount).Date = Dat;
             
+            % Process connectivity matrix
             conmat = sparse(Con.connectivity_results.ConnMatrix_raw);
-            
-            % ===== APPLY SITE FILTERING TO CONNECTIVITY =====
-            if FILTER_LOW_COVER || FILTER_MISSING_GROUPS
-                conmat = conmat(original_indices, original_indices);
-            end
-            % ================================================
             
             % Remove self retention (diagonal)
             conmat = spdiags(zeros(size(conmat,1),1), 0, conmat);
@@ -203,11 +143,10 @@ if RECALCULATE_CONNECTIVITY
     conn_structs = conn_structs(sortIdx);
 
     fprintf('Saving processed connectivity data to %s...\n', cacheFilename);
-    save(cacheFilePath, 'conn_structs', 'original_indices', '-v7.3')
+    save(cacheFilePath, 'conn_structs', '-v7.3')
     
     fprintf('\n========================================\n');
     fprintf('COMPLETE: Loaded %d connectivity matrices\n', connCount);
-    fprintf('Matrix dimensions: %d x %d\n', num_sites, num_sites);
     if ~isempty(DATE_RANGE)
         fprintf('Date range: %s to %s\n', string(DATE_RANGE(1), 'dd-MMM-yyyy'), ...
             string(DATE_RANGE(2), 'dd-MMM-yyyy'));
@@ -225,15 +164,15 @@ else
                'Set RECALCULATE_CONNECTIVITY = true to generate it.'], cacheFilePath);
     end
     
-    load(cacheFilePath, 'conn_structs', 'original_indices');
+    load(cacheFilePath, 'conn_structs');
     fprintf('COMPLETE: Loaded %d connectivity matrices from cache\n', length(conn_structs));
-    fprintf('Matrix dimensions: %d x %d\n', num_sites, num_sites);
     if ~isempty(DATE_RANGE)
         fprintf('Date range: %s to %s\n', ...
                 string(min([conn_structs.Date]), 'dd-MMM-yyyy'), string(max([conn_structs.Date]), 'dd-MMM-yyyy'));
     end
     fprintf('========================================\n\n');
 end
+
 
 fprintf('\n=== CONNECTIVITY DIAGNOSTICS ===\n');
 first_matrix = conn_structs(1).full;
@@ -267,7 +206,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   each susceptibility group
 %       NOTE - carefully consider seed value chosen here, and how many sites are
 %       released from
-seed_frac = 0.00001; % been using this for a lot of runs. 0.0001 also seemed to work okay
+seed_frac = 0.00001; %0.0001 also seemed to work okay
 % seed_frac = 0.01;
 
 % pre-define vectors for initial infected and recovered (dead) coral cover
@@ -279,28 +218,13 @@ R_MS_init = zeros(num_sites,1);
 R_HS_init = zeros(num_sites,1);
 
 % Flat Cay site IDs (29088 is the preferred/primary location):
-flat_cay_site_IDs = [];
-target_IDs = [29088, 29338, 29089, 29339, 29087];
-for id = target_IDs
-    idx = find(reefData.unique_ID == id);
-    if ~isempty(idx)
-        flat_cay_site_IDs = [flat_cay_site_IDs; idx];
-    end
-end
+flat_cay_site_IDs = [find(reefData.unique_ID==29088) find(reefData.unique_ID==29338) ...
+        find(reefData.unique_ID==29089) find(reefData.unique_ID==29339) ...
+        find(reefData.unique_ID==29087)];
 
-if isempty(flat_cay_site_IDs)
-    warning('No Flat Cay sites found in filtered data! Disease will not be seeded.');
-else
-    fprintf('========================================\n');
-    fprintf('DISEASE SEEDING\n');
-    fprintf('Flat Cay sites found: %d\n', length(flat_cay_site_IDs));
-    fprintf('Site IDs: %s\n', num2str(reefData.unique_ID(flat_cay_site_IDs)'));
-    fprintf('========================================\n\n');
-    
-    I_HS_init(flat_cay_site_IDs) = seed_frac * N_HS(flat_cay_site_IDs);
-    I_MS_init(flat_cay_site_IDs) = seed_frac * N_MS(flat_cay_site_IDs);
-    I_LS_init(flat_cay_site_IDs) = seed_frac * N_LS(flat_cay_site_IDs);
-end
+I_HS_init(flat_cay_site_IDs) = seed_frac * N_HS(flat_cay_site_IDs);
+I_MS_init(flat_cay_site_IDs) = seed_frac * N_MS(flat_cay_site_IDs);
+I_LS_init(flat_cay_site_IDs) = seed_frac * N_LS(flat_cay_site_IDs);
 
 % Pre-define vectors for initial susceptible coral cover
 S_LS_init = N_LS - I_LS_init;
@@ -332,58 +256,23 @@ g_HS = 3.33;
 % g_MS = 0.33;
 % g_HS = 2.62;
 
-% NOTE - 9 Nov 2025
-%     The below combo I think is a good starting point for beginning to
-%     "slow down" the outbreak! This is using rate-based option (see ODE
-%     function), and Dobbelaere-based transmission smooth
-%   - seed_frac = 0.00001;
-%   - export_thresh = 0.00001;
-%   - I0 = 0.3 * seed_frac; tau = I0 / 10;
-%   - flux_scale = 1;
-%   - flux_shape = -3;
-
 % threshold of (ABSOLUTE) diseased coral cover at which a site can begin
 % to export disease to other sites
 %   NOTE - should also consider thresholding based off of the relative
 %   cover of a site / its susceptibility groups. or outbreak
 %   stage/intensity
 % export_thresh = 0.0003; % At .001, transmission from flat_cay_site_IDs is unlikely with current parameterization. At .0005 disease immediately begins to transmit but not super duper fast...
-% export_thresh = 0; %null condition
+export_thresh = 0;
 % export_thresh = 999;
-export_thresh = 0.00001;
-
-% Dobbelaere-style internal transmission threshold parameters
-% I0 = 0.0001;   % Infection threshold: fraction of site that must be infected 
-%                % before exponential within-site spread activates
-%                % (0.0001 = 0.01% of colonies; close to seed_frac)
-% I0 = seed_frac;
-% I0 = 0.5 * seed_frac;
-% I0 = 0.3 * seed_frac; %this plus tau = I0 / 10 was as if there were no suppression
-% I0 = 0; %null condition
-%
-% tau = 0.00002; % Transition steepness: controls sharpness of threshold
-%                % (smaller = more switch-like; roughly I0/5 for smooth transition)
-% tau = I0 / 5; % Conservative (smooth transition). e.g., 0.00002 if I0 = 0.0001. 
-% tau = I0 / 10; % Moderate (focused transition). e.g., 0.00001 if I0 = 0.0001
-% tau = I0 / 50; % Sharp (near step-function). e.g., 0.000002 if I0 = 0.0001
-% tau = 1e-10; %null condition
-
-% sensitivity tests
-%
-% I0 = 0; tau = 1e-10; % null condition
-I0 = 0.3 * seed_frac; tau = I0 / 10; % too low suppression - disease plays out solely based on connectivity
-% I0 = 0.6 * seed_frac; tau = I0 / 5; % too low suppresion - maybe slightly suppressed compared to null though ?
-% I0 = 0.8 * seed_frac; tau = I0 / 5; % ?
 
 % reshape parameters for controlling the contribution of upstream disease
 % mass to local disease pool in each patch (site)
 %   flux_scale.*(1-exp(-flux_shape.*T(:)))/(1-exp(-flux_shape));
-flux_scale = 1; % limits max, ranges 0:1. can be used for null condition, but is the default for shaping flux too. best to leave unchanged for now
+flux_scale = 1; % limits max, ranges 0:1
 % flux_scale = 0; % limits max, ranges 0:1
-% flux_shape = -4; % this, with everything else (I0, tau, export_thresh) null, started producing something interesting. slightly slower outbreak
-% flux_shape = 0.001; %null condition
+% flux_shape = -4; % determines curve shape. <0 is concave, >0 is convex; set small (.001) for no (linear) reshape. 0 yields infinity
+flux_shape = 0.001;
 % flux_shape = 10;
-flux_shape = -3;
 
 %% serial test model run
 
@@ -407,25 +296,12 @@ end
 tspan_final = tspan;
 
 % The ODE solver. Note that ODEfun_SCTLD_seascape is a separate .m file 
-fprintf('\n========================================\n');
-fprintf('STARTING ODE SOLVER\n');
-fprintf('Solver: ode45\n');
-fprintf('Time span: [%d %d] days\n', tspan(1), tspan(end));
-fprintf('Number of sites: %d\n', num_sites);
-fprintf('State vector size: %d\n', length(Y0));
-fprintf('========================================\n\n');
-
 clear Y t
 tic
-% [t,Y] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days), tspan, Y0, opts);
-[t,Y] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days,I0,tau), tspan, Y0, opts);elapsed = toc;
-
-fprintf('\n========================================\n');
-fprintf('SOLVER COMPLETE\n');
-fprintf('Elapsed time: %.1f seconds\n', elapsed);
-fprintf('Time points: %d\n', length(t));
-fprintf('Final simulation day: %.1f\n', t(end));
-fprintf('========================================\n\n');
+[t,Y] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days), tspan, Y0, opts);
+% [t,Y] = ode15s(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days), tspan, Y0, opts);
+% [t,Y] = ode23s(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days), tspan, Y0, opts);
+toc
 
 %% POST-SERIAL-RUN DIAGNOSTICS (before parameter sweep)
 
