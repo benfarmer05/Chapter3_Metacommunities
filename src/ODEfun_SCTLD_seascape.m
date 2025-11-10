@@ -119,18 +119,18 @@ rate_ext_LS = b_LS * flux_LS;
 rate_ext_MS = b_MS * flux_MS;
 rate_ext_HS = b_HS * flux_HS;
 
-% ----- ORIGINAL: Internal transmission (always active) -----
-% Local transmission uses TOTAL disease pool P (all groups), not group-specific I
-rate_loc_LS = b_LS * (P(LS_active) ./ N_LS_active);
-rate_loc_MS = b_MS * (P(MS_active) ./ N_MS_active);
-rate_loc_HS = b_HS * (P(HS_active) ./ N_HS_active);
+% % ----- ORIGINAL: Internal transmission (always active) -----
+% % Local transmission uses TOTAL disease pool P (all groups), not group-specific I
+% rate_loc_LS = b_LS * (P(LS_active) ./ N_LS_active);
+% rate_loc_MS = b_MS * (P(MS_active) ./ N_MS_active);
+% rate_loc_HS = b_HS * (P(HS_active) ./ N_HS_active);
 
-% % ----- DOBBELAERE: Internal transmission (threshold-modulated) -----
-% % Local transmission now multiplied by smooth internal_multiplier
-% % This suppresses within-site spread until infection exceeds threshold I0
-% rate_loc_LS = b_LS * (P(LS_active) ./ N_LS_active) .* internal_mult_LS;
-% rate_loc_MS = b_MS * (P(MS_active) ./ N_MS_active) .* internal_mult_MS;
-% rate_loc_HS = b_HS * (P(HS_active) ./ N_HS_active) .* internal_mult_HS;
+% ----- DOBBELAERE: Internal transmission (threshold-modulated) -----
+% Local transmission now multiplied by smooth internal_multiplier
+% This suppresses within-site spread until infection exceeds threshold I0
+rate_loc_LS = b_LS * (P(LS_active) ./ N_LS_active) .* internal_mult_LS;
+rate_loc_MS = b_MS * (P(MS_active) ./ N_MS_active) .* internal_mult_MS;
+rate_loc_HS = b_HS * (P(HS_active) ./ N_HS_active) .* internal_mult_HS;
 
 % Total transmission rate (external + internal)
 rate_tot_LS = rate_loc_LS + rate_ext_LS;
