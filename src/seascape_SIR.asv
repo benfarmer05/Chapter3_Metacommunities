@@ -13,13 +13,13 @@ USE_PARALLEL = true;               % Set to true to use parallel computing (requ
 
 % ===== NEW FILTERING TOGGLES =====
 FILTER_LOW_COVER = false;           % Remove sites with <1% total coral cover
-FILTER_MISSING_GROUPS = true;      % Remove sites with 0% in any susceptibility group
+FILTER_MISSING_GROUPS = false;      % Remove sites with 0% in any susceptibility group
 % ==================================
 
 % DATE_RANGE = [];  % Empty = create/load all connectivity matrices
 % DATE_RANGE = [datetime(2019,1,1), datetime(2019,3,31)];  % just Q1
-DATE_RANGE = [datetime(2019,1,1), datetime(2019,6,30)];  % Q1-Q2
-% DATE_RANGE = [datetime(2019,1,1), datetime(2019,12,31)];  % Q1-Q4
+% DATE_RANGE = [datetime(2019,1,1), datetime(2019,6,30)];  % Q1-Q2
+DATE_RANGE = [datetime(2019,1,1), datetime(2019,12,31)];  % Q1-Q4
 
 %% Load reef data from CSV
 
@@ -262,15 +262,6 @@ N_HS = reefData.high_coral_cover;
 
 N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 
-% define how to seed disease at Flat Cay (or wherever chosen starting
-%   location is placed). this fraction is multiplied by raw coral cover of
-%   each susceptibility group
-% seed_frac = 0.00001; % been using this for a lot of runs. 0.0001 also seemed to work okay
-% seed_frac = 0.01;
-% seed_frac = 0.0001;
-% seed_frac = 0.001; % I think this is too much to start with. Flat Cay blows up unrealistically
-seed_frac = 0.00001;
-
 % NOTE - 9 Nov 2025
 %    The below combo I think is a good starting point for beginning to
 %     "slow down" the outbreak! This is using rate-based option (see ODE
@@ -307,15 +298,54 @@ seed_frac = 0.00001;
 %   - flux_scale = 1;
 %   - flux_shape = -3;
 %
-% starting to get there!! WAIT hold on it seems like I0 is doing literally
-% nothing
+% really tamped down infection here. seems to suggest negative flux_shape
+% may not be a good thing
 %   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
-%   - I0 = 0.000008; tau = I0 / 10; % ACTUALLY THIS HAD I0 OFF!
+%   - I0 = 0.0000003; tau = I0 / 2;
 %   - flux_scale = 1;
 %   - flux_shape = -3;
+%
+% ran this for full year and still got runaway-disease. but seems promising
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
+%   - seed_frac = 0.00001;
+%   - export_thresh = 0.000025;
+%   - I0 = 0.0000003; tau = I0 / 2;
+%   - flux_scale = 1;
+%   - flux_shape = 0.001;
+%
+% WOO!! this one seems like a winner!
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
+%   - seed_frac = 0.00001;
+%   - export_thresh = 0.000025;
+%   - I0 = 0.0000008; tau = I0 / 10;
+%   - flux_scale = 1;
+%   - flux_shape = 0.001;
+%
+% running the above "winner" in a more general scenario is interesting.
+% appears to result in roughly the correct extension to STJ by the end of
+% 2019, but vastly underestimates SCTLD losses in many of the places in
+% between (including STT northeast end). could try tweaking flux_shape to
+% something positive? and maybe also 
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
+%   - seed_frac = 0.00001;
+%   - export_thresh = 0.000025;
+%   - I0 = 0.0000008; tau = I0 / 10;
+%   - flux_scale = 1;
+%   - flux_shape = 0.001;
 
+
+
+
+% define how to seed disease at Flat Cay (or wherever chosen starting
+%   location is placed). this fraction is multiplied by raw coral cover of
+%   each susceptibility group
+% seed_frac = 0.00001; % been using this for a lot of runs. 0.0001 also seemed to work okay
+% seed_frac = 0.01;
+% seed_frac = 0.0001;
+% seed_frac = 0.001; % I think this is too much to start with. Flat Cay blows up unrealistically
+seed_frac = 0.00001;
 
 % threshold of (ABSOLUTE) diseased coral cover at which a site can begin
 % to export disease to other sites
@@ -354,7 +384,8 @@ export_thresh = 0.000025;
 % I0 = 0.000003; tau = I0 / 10; % too low suppression - disease plays out solely based on connectivity
 % I0 = 0.000006; tau = I0 / 5; % too low suppresion - maybe slightly suppressed compared to null though ?
 % I0 = 0.001; tau = I0 / 10; %0.001 go back to if need
-I0 = 0.0000003; tau = I0 / 2;
+I0 = 0.0000008; tau = I0 / 10;
+% I0 = 0.0000001; tau = I0 / 10;
 
 % reshape parameters for controlling the contribution of upstream disease
 % mass to local disease pool in each patch (site)
@@ -362,9 +393,9 @@ I0 = 0.0000003; tau = I0 / 2;
 flux_scale = 1; % limits max, ranges 0:1. can be used for null condition, but is the default for shaping flux too. best to leave unchanged for now
 % flux_scale = 0; % limits max, ranges 0:1
 % flux_shape = -4; % this, with everything else (I0, tau, export_thresh) null, started producing something interesting. slightly slower outbreak
-% flux_shape = 0.001; %null condition
+flux_shape = 0.001; %null condition
 % flux_shape = 10;
-flux_shape = -3;
+% flux_shape = -3;
 
 % pre-define vectors for initial infected and recovered (dead) coral cover
 I_LS_init = zeros(num_sites,1);

@@ -13,7 +13,7 @@ USE_PARALLEL = true;               % Set to true to use parallel computing (requ
 
 % ===== NEW FILTERING TOGGLES =====
 FILTER_LOW_COVER = false;           % Remove sites with <1% total coral cover
-FILTER_MISSING_GROUPS = true;      % Remove sites with 0% in any susceptibility group
+FILTER_MISSING_GROUPS = false;      % Remove sites with 0% in any susceptibility group
 % ==================================
 
 % DATE_RANGE = [];  % Empty = create/load all connectivity matrices
@@ -314,6 +314,27 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   - I0 = 0.0000003; tau = I0 / 2;
 %   - flux_scale = 1;
 %   - flux_shape = 0.001;
+%
+% WOO!! this one seems like a winner!
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
+%   - seed_frac = 0.00001;
+%   - export_thresh = 0.000025;
+%   - I0 = 0.0000008; tau = I0 / 10;
+%   - flux_scale = 1;
+%   - flux_shape = 0.001;
+%
+% running the above "winner" in a more general scenario is interesting.
+% appears to result in roughly the correct extension to STJ by the end of
+% 2019, but vastly underestimates SCTLD losses in many of the places in
+% between (including STT northeast end). could try tweaking flux_shape to
+% something positive? it's possible that weak connections are getting
+% discarded too easily. and maybe also adjusting I0/tau
+%   - include ALL sites; seed at 5 Flat sites
+%   - seed_frac = 0.00001;
+%   - export_thresh = 0.000025;
+%   - I0 = 0.0000008; tau = I0 / 10;
+%   - flux_scale = 1;
+%   - flux_shape = 0.001;
 
 
 
@@ -365,6 +386,7 @@ export_thresh = 0.000025;
 % I0 = 0.000006; tau = I0 / 5; % too low suppresion - maybe slightly suppressed compared to null though ?
 % I0 = 0.001; tau = I0 / 10; %0.001 go back to if need
 I0 = 0.0000008; tau = I0 / 10;
+% I0 = 0.0000001; tau = I0 / 10;
 
 % reshape parameters for controlling the contribution of upstream disease
 % mass to local disease pool in each patch (site)
