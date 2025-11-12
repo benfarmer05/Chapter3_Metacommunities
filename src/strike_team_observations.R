@@ -21,8 +21,16 @@
   #     because they are sometimes earlier in locations than noted by 'rover'
   emerge = read_excel(here("data/SCTLDSites_DateEmerged_Oct2020.xlsx"))
   
-  hunt = read_excel(here("data/Hunt Backup Spreadsheet.xlsx"))
-  interv = read_excel(here("data/SCTLD Intervention Information.xlsx"))
+  # #provided by Courtney Tierney. this was an early tracking sheet, has a mix of anecdotal and confirmed observations.
+  # #     a useful reference for considering if disease arrived earlier to STJ / STX than officially confirmed, but likely
+  # #     not needed for modeling efforts
+  # hunt = read_excel(here("data/Hunt Backup Spreadsheet.xlsx"))
+  
+  #provided by Courtney Tierney. interventions were allowed beginning in 2020, a full year after the beginning of the
+  #     outbreak. this dataset is most useful for inferring SCTLD presence based off of dedicated intervention dive
+  #     teams. likely good for modeling purposes. most useful for discussing spread after the end of available
+  #     hydrodynamics. the "rover" dataset covers the majority of spread, but interventions fill in a few blanks for sure
+  interv = read_excel(here("data/SCTLD Intervention Information.xlsx"), sheet = 'Intervention')
   
   load(here("data/USVI_2019_benthic_cover.rda"))
   
@@ -46,6 +54,18 @@
     dplyr::select(-MMEA.Prevalence, -DCYL.Prevalence, -DSTO.Prevalence, -EFAS.Prevalence, 
                   -CNAT.Prevalence, -DLAB.Prevalence, -PSTR.Prevalence, -PCLI.Prevalence)
   
+  rover <- rover %>%
+    filter(presence != "") %>%  # Drop empty presence values
+    filter(Survey.ID != 1334) %>% #drop random Sint Maarten observation of absence
+    mutate(presence = as.factor(presence))
+  rover_absences <- rover %>% filter(presence == "A")
+  rover_presences <- rover %>% 
+    filter(presence == "P" | presence == "S") %>%
+    arrange(date) %>%
+    distinct(lat, lon, .keep_all = TRUE)
+  rover <- bind_rows(rover_absences, rover_presences) %>%
+    arrange(date)
+  
   emerge = emerge %>%
     rename(location = Location, lat = Latitude, lon = Longitude, 
            date = `Date First emerged`) %>%
@@ -56,7 +76,32 @@
     ) %>%
     arrange(date)
   
-  # Update NCRMP dates
+  # NOTE - way that SCTLD presence is inferred here from interventions and likely is not perfect, and could
+  #           be revisited. interventions could have been performed preemptively before certain confirmation of
+  #           SCTLD. note that absences are not inferred, since at least a few of these "non-interventions" were 
+  #           just re-tagging corals at sites that definitely already had SCTLD
+  interv = interv %>%
+    filter(!is.na(Longitude) & !is.na(Latitude)) %>% #there were a lot of lines with nothing; just drop those
+    filter(Sum_All>0) %>% #drop instances with no intervention performed
+    mutate(
+      # Fix the specific Coki Central entry with year 203 instead of 2023
+      Date = if_else(`Intervention ID` == 1094 & is.na(Date),
+                     as.POSIXct("2023-03-04", tz = "UTC"),
+                     Date)
+    ) %>%
+    select(`Intervention ID`, Island, `Project Code`, `Field Team`, 
+           `Site Name/ Landmark`, Latitude, Longitude, Date, Sum_All, Notes) %>%
+    mutate(
+      Longitude = as.numeric(Longitude),  # Convert to numeric
+      Latitude = as.numeric(Latitude),
+      Longitude = if_else(Longitude > 0, -Longitude, Longitude)  # Fix positive longitudes
+    ) %>%
+    arrange(Date) %>%  # Sort by date to ensure we keep the FIRST intervention
+    distinct(Latitude, Longitude, .keep_all = TRUE) %>%  # Keep first occurrence of each lat/lon
+    mutate(presence = "P")
+    
+  # Update NCRMP dates. some of the NCRMP observations in the 'rover' set were not quite right or seemed inconcsistent,
+  #   so just pulled dates from the NOAA NCRMP github
   cover_dates <- USVI_2019_benthic_cover %>%
     transmute(
       psu = as.character(`PRIMARY_SAMPLE_UNIT`),
@@ -76,6 +121,52 @@
     dplyr::select(-psu, -obs_date) %>%
     arrange(date)
   
+  ################################## combine datasets ##################################
+  
+  # Prepare each dataset with common columns
+  rover_combined <- rover %>%
+    select(location, lat, lon, date, presence, island) %>%
+    mutate(source = "rover")
+  
+  emerge_combined <- emerge %>%
+    select(location, lat, lon, date) %>%
+    mutate(
+      presence = "P",  # All emerge entries are presences
+      island = NA_character_,  # emerge doesn't have island info
+      source = "emerge"
+    )
+  
+  interv_combined <- interv %>%
+    rename(
+      location = `Site Name/ Landmark`,
+      lat = Latitude,
+      lon = Longitude,
+      date = Date,
+      island = Island
+    ) %>%
+    mutate(lon = as.numeric(lon),
+           lat = as.numeric(lat)) %>%  # Convert character to numeric
+    select(location, lat, lon, date, presence, island) %>%
+    mutate(source = "interv")
+  
+  # Combine all three datasets
+  combined <- bind_rows(rover_combined, emerge_combined, interv_combined) %>%
+    arrange(date)
+  
+  # Remove duplicate presences, keeping only first occurrence at each location
+  combined_absences <- combined %>% filter(presence == "A")
+  
+  combined_presences <- combined %>% 
+    filter(presence == "P" | presence == "S") %>%
+    arrange(date) %>%
+    distinct(lat, lon, .keep_all = TRUE)
+  
+  combined <- bind_rows(combined_absences, combined_presences) %>%
+    arrange(date)
+  
+  # Export combined data as CSV
+  write.csv(combined, here("output", "combined_coral_data.csv"), row.names = FALSE)
+  
   ################################## Load Land Data (from richness script) ##################################
   
   land_vect <- readRDS(here("output", "osm_land_vect.rds"))
@@ -84,15 +175,15 @@
   ################################## Static Map - All Occurrences ##################################
   
   # For static/faceted plots: filter to STT/STJ only
-  coral_stt_stj <- rover %>%
-    filter(island == 'STT' | island == 'STJ') %>%
+  coral_stt_stj <- combined %>%
+    filter(island == 'STT' | island == 'STJ' | is.na(island)) %>%
     mutate(
       month = floor_date(date, "month"),
       month_label = format(month, "%b %Y")
     )
   
   # For leaflet maps: use all data
-  coral_all <- rover %>%
+  coral_all <- combined %>%
     mutate(
       month = floor_date(date, "month"),
       month_label = format(month, "%b %Y"),
@@ -107,7 +198,7 @@
     geom_spatvector(data = land_vect, fill = "gray90", color = "black") +
     geom_text(data = island_df, aes(x = x, y = y, label = name), 
               size = 3, family = 'Georgia', color = 'black') +
-    geom_point(data = coral_stt_stj, aes(x = lon, y = lat, color = presence, shape = severity), 
+    geom_point(data = coral_stt_stj, aes(x = lon, y = lat, color = presence), 
                size = 3, alpha = 0.7) +
     scale_color_viridis_d() +
     coord_sf(xlim = xlim, ylim = ylim, expand = FALSE) +
@@ -165,11 +256,10 @@
   
   ################################## Interactive Leaflet Map - All Occurrences ##################################
   
-  # Create color palette for presence
   presence_colors <- colorFactor(viridis::viridis(3), domain = coral_all$presence, na.color = "transparent")
   
-  # Create severity shapes (using circle markers with different sizes)
-  severity_sizes <- c("Low" = 5, "Medium" = 8, "High" = 11)
+  # Create source shapes (using circle markers with different styles for each source)
+  source_colors <- c("rover" = "white", "emerge" = "yellow", "interv" = "lightblue")
   
   interactive_static_map <- leaflet() %>%
     addTiles(group = "OpenStreetMap") %>%
@@ -177,17 +267,17 @@
     addCircleMarkers(
       data = coral_all,
       lng = ~lon, lat = ~lat,
-      radius = ~ifelse(severity %in% names(severity_sizes), severity_sizes[severity], 6),
+      radius = 6,
       fillColor = ~presence_colors(presence),
       fillOpacity = 0.7,
-      color = "white",
+      color = ~source_colors[source],  # Border color by source
       weight = 2,
       stroke = TRUE,
       popup = ~paste0(
         "<b>Location:</b> ", location, "<br>",
-        "<b>Island:</b> ", island, "<br>",
+        "<b>Island:</b> ", ifelse(is.na(island), "Unknown", island), "<br>",
         "<b>Date:</b> ", format(date, "%b %d, %Y"), "<br>",
-        "<b>Severity:</b> ", severity, "<br>",
+        "<b>Source:</b> ", source, "<br>",
         "<b>Presence:</b> ", presence
       )
     ) %>%
@@ -208,9 +298,65 @@
   
   # Save as HTML
   # htmlwidgets::saveWidget(interactive_static_map, 
-  #                         file = here("output", "sctld_interactive_map.html"))
+  #                         file = here("output", "sctld_interactive_combined_map.html"))
   
   ################################## Interactive Leaflet Map - Temporal Progression ##################################
+  
+  # Create color palette for presence
+  presence_colors <- colorFactor(viridis::viridis(3), domain = coral_all$presence, na.color = "transparent")
+  
+  # Create color palette for source (for border colors)
+  source_colors <- colorFactor(c("white", "yellow", "lightblue"), domain = coral_all$source)
+  
+  interactive_static_map <- leaflet() %>%
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+    addCircleMarkers(
+      data = coral_all,
+      lng = ~lon, lat = ~lat,
+      radius = 6,
+      fillColor = ~presence_colors(presence),
+      fillOpacity = 0.7,
+      color = ~source_colors(source),
+      weight = 2,
+      stroke = TRUE,
+      popup = ~paste0(
+        "<b>Location:</b> ", location, "<br>",
+        "<b>Island:</b> ", ifelse(is.na(island), "Unknown", island), "<br>",
+        "<b>Date:</b> ", format(date, "%b %d, %Y"), "<br>",
+        "<b>Source:</b> ", source, "<br>",
+        "<b>Presence:</b> ", presence
+      )
+    ) %>%
+    addLegend(
+      "bottomright",
+      pal = presence_colors,
+      values = coral_all$presence,
+      title = "Presence",
+      opacity = 1
+    ) %>%
+    addLayersControl(
+      baseGroups = c("OpenStreetMap", "Satellite"),
+      options = layersControlOptions(collapsed = FALSE)
+    )
+  
+  # Display the map
+  interactive_static_map
+  
+  # Save as HTML
+  # htmlwidgets::saveWidget(interactive_static_map, 
+  #                         file = here("output", "sctld_interactive_combined_map.html"))
+  
+
+  
+  
+  
+  
+  # Create color palette for presence
+  presence_colors <- colorFactor(viridis::viridis(3), domain = coral_all$presence, na.color = "transparent")
+  
+  # Create color palette for source (for border colors)
+  source_colors <- colorFactor(c("white", "yellow", "lightblue"), domain = coral_all$source)
   
   # Prepare monthly data for ALL islands (for leaflet) - CUMULATIVE
   unique_months_all <- sort(unique(coral_all$month))
@@ -244,15 +390,15 @@
         radius = 6,
         fillColor = ~presence_colors(presence),
         fillOpacity = 0.7,
-        color = "white",
+        color = ~source_colors(source),
         weight = 2,
         stroke = TRUE,
         group = month_label,
         popup = ~paste0(
           "<b>Location:</b> ", location, "<br>",
-          "<b>Island:</b> ", island, "<br>",
+          "<b>Island:</b> ", ifelse(is.na(island), "Unknown", island), "<br>",
           "<b>Date:</b> ", format(date, "%b %d, %Y"), "<br>",
-          "<b>Severity:</b> ", severity, "<br>",
+          "<b>Source:</b> ", source, "<br>",
           "<b>Presence:</b> ", presence
         )
       )
@@ -279,11 +425,15 @@
   
   # Save as HTML
   # htmlwidgets::saveWidget(monthly_maps, 
-  #                         file = here("output", "sctld_temporal_interactive_map.html"))
+  #                         file = here("output", "sctld_temporal_interactive_combined_map.html"))
   
   cat("✓ Interactive leaflet maps created successfully!\n")
   
-
+  
+  
+  
+  
+  
   # # version that was a bit older and didn't have interactive maps
   # # .rs.restartR(clean = TRUE)
   # rm(list=ls())

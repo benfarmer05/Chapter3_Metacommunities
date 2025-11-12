@@ -13,7 +13,7 @@ USE_PARALLEL = true;               % Set to true to use parallel computing (requ
 
 % ===== NEW FILTERING TOGGLES =====
 FILTER_LOW_COVER = false;           % Remove sites with <1% total coral cover
-FILTER_MISSING_GROUPS = false;      % Remove sites with 0% in any susceptibility group
+FILTER_MISSING_GROUPS = true;      % Remove sites with 0% in any susceptibility group
 % ==================================
 
 % DATE_RANGE = [];  % Empty = create/load all connectivity matrices
@@ -315,13 +315,22 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   - flux_scale = 1;
 %   - flux_shape = 0.001;
 %
-% WOO!! this one seems like a winner!
+% WOO!! this one seems like a winner! [but note takes WHILE to "take off"
 %   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.0000008; tau = I0 / 10;
 %   - flux_scale = 1;
 %   - flux_shape = 0.001;
+%
+% interesting test here! still takes a long time to take off but maybe more
+% realistic
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
+%   - seed_frac = 0.00001;
+%   - export_thresh = 0.000025;
+%   - I0 = 0.0000007; tau = I0 / 10;
+%   - flux_scale = 1;
+%   - flux_shape = 1;
 %
 % running the above "winner" in a more general scenario is interesting.
 % appears to result in roughly the correct extension to STJ by the end of
@@ -385,8 +394,9 @@ export_thresh = 0.000025;
 % I0 = 0.000003; tau = I0 / 10; % too low suppression - disease plays out solely based on connectivity
 % I0 = 0.000006; tau = I0 / 5; % too low suppresion - maybe slightly suppressed compared to null though ?
 % I0 = 0.001; tau = I0 / 10; %0.001 go back to if need
-I0 = 0.0000008; tau = I0 / 10;
+% I0 = 0.0000008; tau = I0 / 10;
 % I0 = 0.0000001; tau = I0 / 10;
+I0 = 0.0000007; tau = I0 / 10;
 
 % reshape parameters for controlling the contribution of upstream disease
 % mass to local disease pool in each patch (site)
@@ -394,9 +404,10 @@ I0 = 0.0000008; tau = I0 / 10;
 flux_scale = 1; % limits max, ranges 0:1. can be used for null condition, but is the default for shaping flux too. best to leave unchanged for now
 % flux_scale = 0; % limits max, ranges 0:1
 % flux_shape = -4; % this, with everything else (I0, tau, export_thresh) null, started producing something interesting. slightly slower outbreak
-flux_shape = 0.001; %null condition
+% flux_shape = 0.001; %null condition
 % flux_shape = 10;
 % flux_shape = -3;
+flux_shape = 1; %null condition
 
 % pre-define vectors for initial infected and recovered (dead) coral cover
 I_LS_init = zeros(num_sites,1);
@@ -557,37 +568,37 @@ fprintf('================================\n\n');
 
 
 
+%% extract SIR output for analysis
 
+% Extract compartments from Y and interpolate to discrete days in simulation
+S_LS_output = Y(:,1:num_sites);
+S_MS_output = Y(:,num_sites+1:num_sites*2);
+S_HS_output = Y(:,2*num_sites+1:num_sites*3);
+S_LS_output_days = interp1(t,S_LS_output,tspan(1):tspan(2));
+S_MS_output_days = interp1(t,S_MS_output,tspan(1):tspan(2));
+S_HS_output_days = interp1(t,S_HS_output,tspan(1):tspan(2));
 
-% Extract compartments from Y
-LSHP_temp = Y(:,1:num_sites);
-MSHP_temp = Y(:,num_sites+1:num_sites*2);
-HSHP_temp = Y(:,2*num_sites+1:num_sites*3);
-LSIP_temp = Y(:,3*num_sites+1:num_sites*4);
-MSIP_temp = Y(:,4*num_sites+1:num_sites*5);
-HSIP_temp = Y(:,5*num_sites+1:num_sites*6);
-LSRP_temp = Y(:,6*num_sites+1:num_sites*7);
-MSRP_temp = Y(:,7*num_sites+1:num_sites*8);
-HSRP_temp = Y(:,8*num_sites+1:num_sites*9);
+I_LS_output = Y(:,3*num_sites+1:num_sites*4);
+I_MS_output = Y(:,4*num_sites+1:num_sites*5);
+I_HS_output = Y(:,5*num_sites+1:num_sites*6);
+I_LS_output_days = interp1(t,I_LS_output,tspan(1):tspan(2));
+I_MS_output_days = interp1(t,I_MS_output,tspan(1):tspan(2));
+I_HS_output_days = interp1(t,I_HS_output,tspan(1):tspan(2));
 
-% Interpolate to daily timesteps
-interpLSHP_temp = interp1(t,LSHP_temp,tspan(1):tspan(2));
-interpMSHP_temp = interp1(t,MSHP_temp,tspan(1):tspan(2));
-interpHSHP_temp = interp1(t,HSHP_temp,tspan(1):tspan(2));
-interpLSIP_temp = interp1(t,LSIP_temp,tspan(1):tspan(2));
-interpMSIP_temp = interp1(t,MSIP_temp,tspan(1):tspan(2));
-interpHSIP_temp = interp1(t,HSIP_temp,tspan(1):tspan(2));
-interpLSRP_temp = interp1(t,LSRP_temp,tspan(1):tspan(2));
-interpMSRP_temp = interp1(t,MSRP_temp,tspan(1):tspan(2));
-interpHSRP_temp = interp1(t,HSRP_temp,tspan(1):tspan(2));
+R_LS_output = Y(:,6*num_sites+1:num_sites*7);
+R_MS_output = Y(:,7*num_sites+1:num_sites*8);
+R_HS_output = Y(:,8*num_sites+1:num_sites*9);
+R_LS_output_days = interp1(t,R_LS_output,tspan(1):tspan(2));
+R_MS_output_days = interp1(t,R_MS_output,tspan(1):tspan(2));
+R_HS_output_days = interp1(t,R_HS_output,tspan(1):tspan(2));
 
 % Pick first seed site for analysis
 example_site = flat_cay_site_IDs(1);
 
 % Calculate totals for mass balance
-total_S_temp = interpLSHP_temp(:,example_site) + interpMSHP_temp(:,example_site) + interpHSHP_temp(:,example_site);
-total_I_temp = interpLSIP_temp(:,example_site) + interpMSIP_temp(:,example_site) + interpHSIP_temp(:,example_site);
-total_R_temp = interpLSRP_temp(:,example_site) + interpMSRP_temp(:,example_site) + interpHSRP_temp(:,example_site);
+total_S_temp = S_LS_output_days(:,example_site) + S_MS_output_days(:,example_site) + S_HS_output_days(:,example_site);
+total_I_temp = I_LS_output_days(:,example_site) + I_MS_output_days(:,example_site) + I_HS_output_days(:,example_site);
+total_R_temp = R_LS_output_days(:,example_site) + R_MS_output_days(:,example_site) + R_HS_output_days(:,example_site);
 total_mass_temp = total_S_temp + total_I_temp + total_R_temp;
 
 fprintf('\n=== SERIAL RUN DIAGNOSTICS ===\n');
@@ -601,7 +612,7 @@ fprintf('===============================\n\n');
 figure('Name', 'Serial Run - Post-Run Diagnostics');
 
 subplot(2,2,1);
-I_total_at_seeds_temp = interpLSIP_temp(:, flat_cay_site_IDs) + interpMSIP_temp(:, flat_cay_site_IDs) + interpHSIP_temp(:, flat_cay_site_IDs);
+I_total_at_seeds_temp = I_LS_output_days(:, flat_cay_site_IDs) + I_MS_output_days(:, flat_cay_site_IDs) + I_HS_output_days(:, flat_cay_site_IDs);
 plot(I_total_at_seeds_temp, 'LineWidth', 1.5);
 xlabel('Day'); ylabel('Infected coral cover');
 title('Infection trajectory at seed sites');
@@ -609,7 +620,7 @@ legend(arrayfun(@(x) sprintf('Site %d', unique_IDs(x)), flat_cay_site_IDs, 'Unif
 grid on;
 
 subplot(2,2,2);
-P_at_seeds_temp = interpLSIP_temp(:,flat_cay_site_IDs) + interpMSIP_temp(:,flat_cay_site_IDs) + interpHSIP_temp(:,flat_cay_site_IDs);
+P_at_seeds_temp = I_LS_output_days(:,flat_cay_site_IDs) + I_MS_output_days(:,flat_cay_site_IDs) + I_HS_output_days(:,flat_cay_site_IDs);
 plot(P_at_seeds_temp, 'LineWidth', 1.5);
 xlabel('Day'); ylabel('Disease pool (P)');
 title('Disease pool at seed sites');
@@ -636,27 +647,27 @@ grid on;
 figure('Name', 'Serial Run - Detailed SIR by Group', 'Position', [150 150 1400 800]);
 
 subplot(2,2,1);
-plot(interpLSHP_temp(:,example_site), 'b', 'LineWidth', 1.5); hold on;
-plot(interpLSIP_temp(:,example_site), 'r', 'LineWidth', 1.5);
-plot(interpLSRP_temp(:,example_site), 'k', 'LineWidth', 1.5);
+plot(S_LS_output_days(:,example_site), 'b', 'LineWidth', 1.5); hold on;
+plot(I_LS_output_days(:,example_site), 'r', 'LineWidth', 1.5);
+plot(R_LS_output_days(:,example_site), 'k', 'LineWidth', 1.5);
 xlabel('Day'); ylabel('Cover');
 title(sprintf('LS Group - Site %d', unique_IDs(example_site)));
 legend('S','I','R');
 grid on;
 
 subplot(2,2,2);
-plot(interpMSHP_temp(:,example_site), 'b', 'LineWidth', 1.5); hold on;
-plot(interpMSIP_temp(:,example_site), 'r', 'LineWidth', 1.5);
-plot(interpMSRP_temp(:,example_site), 'k', 'LineWidth', 1.5);
+plot(S_MS_output_days(:,example_site), 'b', 'LineWidth', 1.5); hold on;
+plot(I_MS_output_days(:,example_site), 'r', 'LineWidth', 1.5);
+plot(R_MS_output_days(:,example_site), 'k', 'LineWidth', 1.5);
 xlabel('Day'); ylabel('Cover');
 title(sprintf('MS Group - Site %d', unique_IDs(example_site)));
 legend('S','I','R');
 grid on;
 
 subplot(2,2,3);
-plot(interpHSHP_temp(:,example_site), 'b', 'LineWidth', 1.5); hold on;
-plot(interpHSIP_temp(:,example_site), 'r', 'LineWidth', 1.5);
-plot(interpHSRP_temp(:,example_site), 'k', 'LineWidth', 1.5);
+plot(S_HS_output_days(:,example_site), 'b', 'LineWidth', 1.5); hold on;
+plot(I_HS_output_days(:,example_site), 'r', 'LineWidth', 1.5);
+plot(R_HS_output_days(:,example_site), 'k', 'LineWidth', 1.5);
 xlabel('Day'); ylabel('Cover');
 title(sprintf('HS Group - Site %d', unique_IDs(example_site)));
 legend('S','I','R');
@@ -694,7 +705,7 @@ sites_with_zeros = find((N_LS == 0) | (N_MS == 0) | (N_HS == 0));
 fprintf('Sites with 0 in any group: %d\n', length(sites_with_zeros));
 
 % Calculate total removed coral (R) at final timepoint for ONLY these sites
-total_R_final = interpLSRP_temp(end,:) + interpMSRP_temp(end,:) + interpHSRP_temp(end,:);
+total_R_final = R_LS_output_days(end,:) + R_MS_output_days(end,:) + R_HS_output_days(end,:);
 total_R_at_zero_sites = total_R_final(sites_with_zeros);
 
 % Get top 99.5% percentile threshold among ONLY the zero-group sites
@@ -718,30 +729,30 @@ if ~isempty(high_removal_sites)
     figure('Name', 'High-Removal Site with Missing Group');
     
     subplot(2,2,1);
-    plot(interpLSHP_temp(:,random_site), 'b', 'LineWidth', 1.5); hold on;
-    plot(interpLSIP_temp(:,random_site), 'r', 'LineWidth', 1.5);
-    plot(interpLSRP_temp(:,random_site), 'k', 'LineWidth', 1.5);
+    plot(S_LS_output_days(:,random_site), 'b', 'LineWidth', 1.5); hold on;
+    plot(I_LS_output_days(:,random_site), 'r', 'LineWidth', 1.5);
+    plot(R_LS_output_days(:,random_site), 'k', 'LineWidth', 1.5);
     title(sprintf('LS - Site %d', unique_IDs(random_site)));
     legend('S','I','R'); grid on;
     
     subplot(2,2,2);
-    plot(interpMSHP_temp(:,random_site), 'b', 'LineWidth', 1.5); hold on;
-    plot(interpMSIP_temp(:,random_site), 'r', 'LineWidth', 1.5);
-    plot(interpMSRP_temp(:,random_site), 'k', 'LineWidth', 1.5);
+    plot(S_MS_output_days(:,random_site), 'b', 'LineWidth', 1.5); hold on;
+    plot(I_MS_output_days(:,random_site), 'r', 'LineWidth', 1.5);
+    plot(R_MS_output_days(:,random_site), 'k', 'LineWidth', 1.5);
     title(sprintf('MS - Site %d', unique_IDs(random_site)));
     legend('S','I','R'); grid on;
     
     subplot(2,2,3);
-    plot(interpHSHP_temp(:,random_site), 'b', 'LineWidth', 1.5); hold on;
-    plot(interpHSIP_temp(:,random_site), 'r', 'LineWidth', 1.5);
-    plot(interpHSRP_temp(:,random_site), 'k', 'LineWidth', 1.5);
+    plot(S_HS_output_days(:,random_site), 'b', 'LineWidth', 1.5); hold on;
+    plot(I_HS_output_days(:,random_site), 'r', 'LineWidth', 1.5);
+    plot(R_HS_output_days(:,random_site), 'k', 'LineWidth', 1.5);
     title(sprintf('HS - Site %d', unique_IDs(random_site)));
     legend('S','I','R'); grid on;
     
     subplot(2,2,4);
-    total_S = interpLSHP_temp(:,random_site) + interpMSHP_temp(:,random_site) + interpHSHP_temp(:,random_site);
-    total_I = interpLSIP_temp(:,random_site) + interpMSIP_temp(:,random_site) + interpHSIP_temp(:,random_site);
-    total_R = interpLSRP_temp(:,random_site) + interpMSRP_temp(:,random_site) + interpHSRP_temp(:,random_site);
+    total_S = S_LS_output_days(:,random_site) + S_MS_output_days(:,random_site) + S_HS_output_days(:,random_site);
+    total_I = I_LS_output_days(:,random_site) + I_MS_output_days(:,random_site) + I_HS_output_days(:,random_site);
+    total_R = R_LS_output_days(:,random_site) + R_MS_output_days(:,random_site) + R_HS_output_days(:,random_site);
     plot(total_S, 'b', 'LineWidth', 1.5); hold on;
     plot(total_I, 'r', 'LineWidth', 1.5);
     plot(total_R, 'k', 'LineWidth', 1.5);
@@ -805,17 +816,20 @@ title(sprintf('Missing Groups Filter\nRemoved: %d of %d (%.1f%%)', sum(has_zero)
 legend('Kept', 'Removed', 'Location', 'best');
 axis equal tight; grid on;
 
-%% Animate outbreak
+
+
+
+%% Animation of outbreak
 
 fprintf('Creating diagnostic movie...\n');
 
 % Extract infected, susceptible, and removed populations over time
-TIP = interpLSIP_temp + interpMSIP_temp + interpHSIP_temp;  % Total infected
-TSP = interpLSHP_temp + interpMSHP_temp + interpHSHP_temp;  % Total susceptible  
-TRP = interpLSRP_temp + interpMSRP_temp + interpHSRP_temp;  % Total removed
+S_total_output_days = S_LS_output_days + S_MS_output_days + S_HS_output_days;  % Total susceptible  
+I_total_output_days = I_LS_output_days + I_MS_output_days + I_HS_output_days;  % Total infected
+R_total_output_days = R_LS_output_days + R_MS_output_days + R_HS_output_days;  % Total removed
 
 % Create colormaps
-edges = [0 .000000001 .001 .1 1];
+breakpoints = [0 .000000001 .001 .1 1]; %very very low coral cover is going to show up visually this way
 Cstart = [
     0.25 .5 0.25;      % light green
     1 1 .2;            % green
@@ -828,146 +842,159 @@ Cend = [
     1.00 0.00 0.00;    % orange
     0 0 0;             % red
 ];
-cmap_I = stackedColormap(edges, Cstart, Cend, 256, [1 1 1 1]);
-cmap_R = stackedColormap(edges, Cstart, Cend, 256, [1 1 1 1]);
+cmap_I = stackedColormap(breakpoints, Cstart, Cend, 256, [1 1 1 1]);
+cmap_R = stackedColormap(breakpoints, Cstart, Cend, 256, [1 1 1 1]);
 
-% % Create figure
-% f = figure('renderer', 'zbuffer','Position', [10 10 1400 1000]);
-% set(f,'nextplot','replacechildren'); 
-% 
-% % Create 2x2 layout
-% T = tiledlayout(2,2,'TileSpacing','compact','Padding','compact');
-% 
-% % Initialize plots
-% axv1 = nexttile(T,1);
-%     h1 = scatter(axv1, locations(:,1), locations(:,2), 7, TIP(1,:)', 'filled');
-%     colormap(axv1, cmap_I);
-%     clim([0 .01]);
-%     c1 = colorbar(axv1);
-%     axis equal
-% 
-% axv2 = nexttile(T,2);
-%     h2 = scatter(axv2, locations(:,1), locations(:,2), 7, TIP(1,:)'./N_site(:), 'filled');
-%     colormap(axv2, cmap_I);
-%     clim([0 .01]);
-%     c2 = colorbar(axv2);
-%     axis equal 
-% 
-% axv3 = nexttile(T,3);
-%     h3 = scatter(axv3, locations(:,1), locations(:,2), 7, N_site(:)-TSP(1,:)', 'filled');
-%     c3 = colorbar(axv3);
-%     clim([0 1]);
-%     colormap(axv3, cmap_R)
-%     axis equal
-% 
-% axv4 = nexttile(T,4);
-%     h4 = scatter(axv4, locations(:,1), locations(:,2), 7, (N_site(:)-TSP(1,:)')./N_site(:), 'filled');
-%     c4 = colorbar(axv4);
-%     clim([0 1]);
-%     colormap(axv4, cmap_R)
-%     axis equal
-% 
-% % Create video writer
-% vidname = sprintf('DisVid_Diagnostic_thresh%d_scale%.1f_shape%.3f', ...
-%                   export_thresh, flux_scale, flux_shape);
-% v = VideoWriter(fullfile(seascapePath, vidname));
-% v.FrameRate = 5;
-% open(v);
-% 
-% % Threshold for disease front boundary
-% bthresh = 0.001; % 0.1% of bottom
-% 
-% % Determine how many days actually simulated
-% num_days = size(TIP, 1);
-% fprintf('Creating movie for %d days of simulation\n', num_days);
-% 
-% % Generate movie frames
-% for k = 1:1:num_days
-%     Dt = datetime(2019,1,1) + (tspan(1) + k - 2);  % Adjust for actual tspan start
-% 
-%     % Find sites with dead coral above threshold (disease front)
-%     sick = TRP(k,:) >= bthresh;
-%     if sum(sick) >= 3  % Need at least 3 points for boundary
-%         dflocations = locations(sick,:);
-%         try
-%             df = boundary(dflocations(:,1), dflocations(:,2), 0.7);
-%             draw_boundary = true;
-%         catch
-%             draw_boundary = false;  % Not enough points or other issue
-%         end
-%     else
-%         draw_boundary = false;
-%     end
-% 
-%     % Update plot 1: Disease prevalence - proportion of bottom
-%     set(h1, 'CData', TIP(k,:)');
-%     if draw_boundary
-%         p1 = patch(axv1, dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
-%                    'EdgeColor', 'r', 'FaceAlpha', 0.2);
-%     end
-%     title(axv1, 'Disease prevalence - proportion of bottom', ...
-%           sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-%     colormap(axv1, cmap_I);
-%     clim([0 .01]);
-%     axis equal
-% 
-%     % Update plot 2: Disease prevalence - proportion of living coral
-%     set(h2, 'CData', TIP(k,:)'./N_site(:));
-%     if draw_boundary
-%         p2 = patch(axv2, dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
-%                    'EdgeColor', 'r', 'FaceAlpha', 0.2);
-%     end
-%     title(axv2, 'Disease prevalence - proportion of living coral', ...
-%           sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-%     colormap(axv2, cmap_I);
-%     clim([0 .1]);
-%     axis equal
-% 
-%     % Update plot 3: Total coral cover lost
-%     set(h3, 'CData', (N_site(:)-TSP(k,:)'));
-%     if draw_boundary
-%         p3 = patch(axv3, dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
-%                    'EdgeColor', 'r', 'FaceAlpha', 0.2);
-%     end
-%     title(axv3, 'Total coral cover lost', ...
-%           sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-%     clim([0 1]);
-%     colormap(axv3, cmap_R)
-%     axis equal
-% 
-%     % Update plot 4: Proportion coral cover lost
-%     set(h4, 'CData', (N_site(:)-TSP(k,:)')./N_site(:));
-%     if draw_boundary
-%         p4 = patch(axv4, dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
-%                    'EdgeColor', 'r', 'FaceAlpha', 0.2);
-%     end
-%     title(axv4, 'Proportion coral cover lost', ...
-%           sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-%     clim([0 1]);
-%     colormap(axv4, cmap_R)
-%     axis equal
-% 
-%     % Capture frame and write to video
-%     F = getframe(f);
-%     writeVideo(v, F);
-% 
-%     % Clean up patches for next frame
-%     if draw_boundary
-%         delete(p1)
-%         delete(p2)
-%         delete(p3)
-%         delete(p4)
-%     end
-% 
-%     % Progress indicator every 10 days
-%     if mod(k, 10) == 0
-%         fprintf('  Frame %d/%d\n', k, num_days);
-%     end
-% end
-% 
-% close(v);
-% fprintf('Movie saved as: %s.avi\n', vidname);
+% Create figure (no renderer specification - MATLAB handles automatically)
+f = figure('Position', [10 10 1400 1000]);
+set(f, 'nextplot', 'replacechildren'); 
 
+% Create 2x2 layout
+T = tiledlayout(2,2, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+% Initialize plots
+%
+% absolute infected coral cover
+axv1 = nexttile(T,1);
+    h1 = scatter(axv1, locations(:,1), locations(:,2), 7, I_total_output_days(1,:)', 'filled');
+    colormap(axv1, cmap_I);
+    clim([0 .01]);
+    c1 = colorbar(axv1);
+    axis equal
+
+% relative infected coral cover
+axv2 = nexttile(T,2);
+    h2 = scatter(axv2, locations(:,1), locations(:,2), 7, I_total_output_days(1,:)'./N_site(:), 'filled');
+    colormap(axv2, cmap_I);
+    clim([0 .01]);
+    c2 = colorbar(axv2);
+    axis equal 
+
+% absolute removed coral cover
+axv3 = nexttile(T,3);
+    h3 = scatter(axv3, locations(:,1), locations(:,2), 7, N_site(:)-S_total_output_days(1,:)', 'filled');
+    c3 = colorbar(axv3);
+    clim([0 1]);
+    colormap(axv3, cmap_R)
+    axis equal
+
+% relative removed coral cover
+axv4 = nexttile(T,4);
+    h4 = scatter(axv4, locations(:,1), locations(:,2), 7, (N_site(:)-S_total_output_days(1,:)')./N_site(:), 'filled');
+    c4 = colorbar(axv4);
+    clim([0 1]);
+    colormap(axv4, cmap_R)
+    axis equal
+
+% Create video writer with MPEG-4 format
+vidname = sprintf('DisVid_Diagnostic_thresh%d_scale%.1f_shape%.3f', ...
+                  export_thresh, flux_scale, flux_shape);
+v = VideoWriter(fullfile(seascapePath, vidname), 'MPEG-4');
+v.Quality = 95;  % 0-100, higher = better quality but larger file
+v.FrameRate = 5;
+open(v);
+
+% Threshold for disease front boundary
+%   - this is saying that only once 0.1% cover within a site (patch) has
+%       been removed, is that site considered "observable" to, for example,
+%       the naked eye of strike team divers in the water within that ~0.4
+%       m2 grid square
+removed_cover_thresh = 0.001; % in proportion 0 to 1 (not 0-100%)
+
+% Determine how many days actually simulated
+num_days = size(I_total_output_days, 1);
+fprintf('Creating animation for %d days of simulation\n', num_days);
+
+% Generate animation frames
+for k = 1:1:num_days
+    Dt = datetime(2019,1,1) + (tspan(1) + k - 2);  % Adjust for actual tspan start
+
+    % Find sites with dead coral above threshold (disease front)
+    observable_sick_sites = R_total_output_days(k,:) >= removed_cover_thresh;
+    if sum(observable_sick_sites) >= 3  % Need at least 3 points for boundary
+        locs_sick_sites = locations(observable_sick_sites,:);
+        try
+            bounds_sick_sites = boundary(locs_sick_sites(:,1), locs_sick_sites(:,2), 0.7);
+            draw_boundary = true;
+        catch
+            draw_boundary = false;  % Not enough points or other issue
+        end
+    else
+        draw_boundary = false;
+    end
+
+    % Update plot 1: Disease prevalence (absolute % cover of site which is infected)
+    set(h1, 'CData', I_total_output_days(k,:)');
+    if draw_boundary
+        p1 = patch(axv1, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
+                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
+    end
+    %
+    title(axv1, 'Infected cover of seafloor (%)', ...
+          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
+    colormap(axv1, cmap_I);
+    clim([0 .01]);
+    axis equal
+
+    % Update plot 2: Disease prevalence (relative % cover of site which is infected)
+    set(h2, 'CData', I_total_output_days(k,:)'./N_site(:));
+    if draw_boundary
+        p2 = patch(axv2, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
+                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
+    end
+    %
+    title(axv2, 'Relative cover of infected coral (%)', ...
+          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
+    colormap(axv2, cmap_I);
+    clim([0 .1]);
+    axis equal
+
+    % Update plot 3: Total coral cover lost
+    set(h3, 'CData', (N_site(:)-S_total_output_days(k,:)'));
+    if draw_boundary
+        p3 = patch(axv3, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
+                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
+    end
+    %
+    title(axv3, 'Removed cover of seafloor (%)', ...
+          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
+    clim([0 1]);
+    colormap(axv3, cmap_R)
+    axis equal
+
+    % Update plot 4: Proportion coral cover lost
+    set(h4, 'CData', (N_site(:)-S_total_output_days(k,:)')./N_site(:));
+    if draw_boundary
+        p4 = patch(axv4, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
+                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
+    end
+    %
+    title(axv4, 'Relative cover of removed coral (%)', ...
+          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
+    clim([0 1]);
+    colormap(axv4, cmap_R)
+    axis equal
+
+    % Capture frame and write to video
+    F = getframe(f);
+    writeVideo(v, F);
+
+    % Clean up patches for next frame
+    if draw_boundary
+        delete(p1)
+        delete(p2)
+        delete(p3)
+        delete(p4)
+    end
+
+    % Progress indicator every 10 days
+    if mod(k, 10) == 0
+        fprintf('  Frame %d/%d\n', k, num_days);
+    end
+end
+
+close(v);
+fprintf('Animation saved as: %s.mp4\n', vidname);
 
 
 
@@ -976,7 +1003,7 @@ cmap_R = stackedColormap(edges, Cstart, Cend, 256, [1 1 1 1]);
 fprintf('Creating static figure of final state...\n');
 
 % Find last valid timepoint (no NaN values)
-valid_times = find(all(~isnan(TIP), 2));
+valid_times = find(all(~isnan(I_total_output_days), 2));
 if isempty(valid_times)
     warning('No valid timepoints found!');
 else
@@ -993,14 +1020,14 @@ else
           'FontSize', 16, 'FontWeight', 'bold');
     
     % Threshold for disease front boundary
-    bthresh = 0.001;
-    sick = TRP(last_valid,:) >= bthresh;
+    removed_cover_thresh = 0.001;
+    observable_sick_sites = R_total_output_days(last_valid,:) >= removed_cover_thresh;
     
     % Try to compute boundary
-    if sum(sick) >= 3
-        dflocations = locations(sick,:);
+    if sum(observable_sick_sites) >= 3
+        locs_sick_sites = locations(observable_sick_sites,:);
         try
-            df = boundary(dflocations(:,1), dflocations(:,2), 0.7);
+            bounds_sick_sites = boundary(locs_sick_sites(:,1), locs_sick_sites(:,2), 0.7);
             has_boundary = true;
         catch
             has_boundary = false;
@@ -1011,10 +1038,10 @@ else
     
     % Plot 1: Disease prevalence - proportion of bottom
     nexttile(T_final, 1);
-    scatter(locations(:,1), locations(:,2), 7, TIP(last_valid,:)', 'filled');
+    scatter(locations(:,1), locations(:,2), 7, I_total_output_days(last_valid,:)', 'filled');
     if has_boundary
         hold on;
-        patch(dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
+        patch(locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
               'EdgeColor', 'r', 'FaceAlpha', 0.2, 'LineWidth', 2);
         hold off;
     end
@@ -1026,10 +1053,10 @@ else
     
     % Plot 2: Disease prevalence - proportion of living coral
     nexttile(T_final, 2);
-    scatter(locations(:,1), locations(:,2), 7, TIP(last_valid,:)'./N_site(:), 'filled');
+    scatter(locations(:,1), locations(:,2), 7, I_total_output_days(last_valid,:)'./N_site(:), 'filled');
     if has_boundary
         hold on;
-        patch(dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
+        patch(locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
               'EdgeColor', 'r', 'FaceAlpha', 0.2, 'LineWidth', 2);
         hold off;
     end
@@ -1041,10 +1068,10 @@ else
     
     % Plot 3: Total coral cover lost
     nexttile(T_final, 3);
-    scatter(locations(:,1), locations(:,2), 7, N_site(:)-TSP(last_valid,:)', 'filled');
+    scatter(locations(:,1), locations(:,2), 7, N_site(:)-S_total_output_days(last_valid,:)', 'filled');
     if has_boundary
         hold on;
-        patch(dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
+        patch(locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
               'EdgeColor', 'r', 'FaceAlpha', 0.2, 'LineWidth', 2);
         hold off;
     end
@@ -1056,10 +1083,10 @@ else
     
     % Plot 4: Proportion coral cover lost
     nexttile(T_final, 4);
-    scatter(locations(:,1), locations(:,2), 7, (N_site(:)-TSP(last_valid,:)')./N_site(:), 'filled');
+    scatter(locations(:,1), locations(:,2), 7, (N_site(:)-S_total_output_days(last_valid,:)')./N_site(:), 'filled');
     if has_boundary
         hold on;
-        patch(dflocations(df,1), dflocations(df,2), [.8 .9 1], ...
+        patch(locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
               'EdgeColor', 'r', 'FaceAlpha', 0.2, 'LineWidth', 2);
         hold off;
     end
@@ -1080,14 +1107,14 @@ else
     % Summary statistics
     fprintf('\n=== FINAL STATE SUMMARY ===\n');
     fprintf('Sites with any infection: %d (%.1f%%)\n', ...
-            nnz(TIP(last_valid,:) > 0), 100 * nnz(TIP(last_valid, :) > 0) / num_sites);
+            nnz(I_total_output_days(last_valid,:) > 0), 100 * nnz(I_total_output_days(last_valid, :) > 0) / num_sites);
     fprintf('Sites with >0.1%% cover lost: %d (%.1f%%)\n', ...
-            nnz(TRP(last_valid, :) > 0.001), 100 * nnz(TRP(last_valid, :) > 0.001) / num_sites);
+            nnz(R_total_output_days(last_valid, :) > 0.001), 100 * nnz(R_total_output_days(last_valid, :) > 0.001) / num_sites);
     fprintf('Total coral cover lost: %.4f (%.2f%% of initial)\n', ...
-            sum(TRP(last_valid, :)), 100 * sum(TRP(last_valid, :)) / sum(N_site));
-    fprintf('Max site-level cover lost: %.4f\n', max(TRP(last_valid, :)));
+            sum(R_total_output_days(last_valid, :)), 100 * sum(R_total_output_days(last_valid, :)) / sum(N_site));
+    fprintf('Max site-level cover lost: %.4f\n', max(R_total_output_days(last_valid, :)));
     fprintf('Mean cover lost (diseased sites only): %.4f\n', ...
-            mean(TRP(last_valid, TRP(last_valid, :) > 0)));
+            mean(R_total_output_days(last_valid, R_total_output_days(last_valid, :) > 0)));
     fprintf('===========================\n\n');
 end
 
@@ -1305,7 +1332,7 @@ end
 % %     title(strcat('thresh = ',num2str(Results(i).thresh),', flux_shape = ',num2str(Results(i).flux_shape)))
 % % end
 % 
-% %% Interpolate results from manual run for movie generation
+% %% Interpolate results from manual run for animation
 % % The output from the solver is not in days, but is in unequal time steps.
 % % You need to interpolate back to days..
 % LSHP = Y(:,1:num_sites);
@@ -1421,7 +1448,7 @@ end
 % 
 % 
 % 
-% %% Make results into a movie - spatial visualization of disease spread
+% %% Make results into a animation - spatial visualization of disease spread
 % 
 % % Use Results(6) as example: thresh=0.0003, flux_shape=-4
 % TIP = Results(6).LSI + Results(6).MSI + Results(6).HSI;
@@ -1453,7 +1480,7 @@ end
 % cmap_I = stackedColormap(edges, Cstart, Cend, 256, [1 1 1 1]);
 % cmap_R = stackedColormap(edges, Cstart, Cend, 256, [1 1 1 1]);
 % 
-% % Create 2x2 layout for movie
+% % Create 2x2 layout for animation
 % T = tiledlayout(2,2,'TileSpacing','compact','Padding','compact');
 % 
 % % Initialize plots
@@ -1493,7 +1520,7 @@ end
 % % Threshold for which sites to include when drawing disease front boundary
 % bthresh = 0.001; % .1% of bottom
 % 
-% % Generate movie frames
+% % Generate animation frames
 % for k = 1:1:size(TIP,1)
 %     Dt = datetime('1-Jan-2019')+k-1;
 % 
