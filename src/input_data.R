@@ -5,19 +5,25 @@
   library(here)
   library(readxl)
   library(tidyverse)
-  library(gganimate)
-  library(MASS)
   library(sf)
-  library(ggspatial)
   library(terra)
   library(tidyterra)
   library(extrafont)
   library(leaflet)
-  
+
   ################################## Set-up ##################################
   
+  #a very rich dataset of both SCTLD presence and absences. the primary driver behind observations.
+  #   - provided by Courtney Tierney in April 2025
   rover = read.csv(here("data/SCTLDRoverSurveyFULLspecies_0.csv"))
+  
+  #provided by Marilyn Brandt. much smaller and mostly presence-only. However, dates may be useful
+  #     because they are sometimes earlier in locations than noted by 'rover'
   emerge = read_excel(here("data/SCTLDSites_DateEmerged_Oct2020.xlsx"))
+  
+  hunt = read_excel(here("data/Hunt Backup Spreadsheet.xlsx"))
+  interv = read_excel(here("data/SCTLD Intervention Information.xlsx"))
+  
   load(here("data/USVI_2019_benthic_cover.rda"))
   
   # Clean up dataframes
@@ -43,10 +49,10 @@
   emerge = emerge %>%
     rename(location = Location, lat = Latitude, lon = Longitude, 
            date = `Date First emerged`) %>%
-    filter(grepl("^\\d{4}_[A-Za-z]{3}$", `date`)) %>%
+    filter(grepl("^\\d{4}_[A-Za-z]{3}$", `date`)) %>% #this drops the one "absence" in the dataset, at Coral Bay
     mutate(
       date = parse_date_time(`date`, "Y_b"),
-      date = as.POSIXct(rollback(date + months(1)))
+      date = as.POSIXct(rollback(date + months(1))) # ....
     ) %>%
     arrange(date)
   
