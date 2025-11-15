@@ -585,6 +585,23 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   less explosive in the end but still too much...and starts too slow
 %   - flux_scale = 1;
 %   - flux_shape = 1.5;
+%
+% also interesting. random jump to STX, so flux prob too high, but spread
+% is alright
+%   - include ALL sites; seed at 15+ sites around flat; [new removal method; use 'negative' in opts]
+%   - seed_frac = 0.00001;
+%   - export_thresh = 0;
+%   - I0 = 0.0000017; tau = I0 / 10;
+%   - flux_scale = 1;
+%   - flux_shape = 3;
+%
+% pretty damn good
+%   - include ALL sites; seed at 15+ sites around flat; [new removal method; use 'negative' in opts]
+%   - seed_frac = 0.00001;
+%   - export_thresh = 0;
+%   - I0 = 0.0000010455; tau = I0 / 10
+%   - flux_scale = 1;
+%   - flux_shape = 1.5;
 
 
 % define how to seed disease at Flat Cay (or wherever chosen starting
@@ -640,8 +657,8 @@ export_thresh = 0; %null condition
 % I0 = 0.000000775; tau = I0 / 10;
 % I0 = 0.0000009; tau = I0 / 10;
 % I0 = 0.00000101; tau = I0 / 10;
-% I0 = 0.00000105; tau = I0 / 10;
-I0 = 0.000002; tau = I0 / 10;
+I0 = 0.0000010455; tau = I0 / 10;
+% I0 = 0.0000017; tau = I0 / 10;
 
 % reshape parameters for controlling the contribution of upstream disease
 % mass to local disease pool in each patch (site)
@@ -652,7 +669,7 @@ flux_scale = 1; % limits max, ranges 0:1. can be used for null condition, but is
 % flux_shape = 0.001; %null condition
 % flux_shape = 10;
 % flux_shape = -3;
-flux_shape = 3; %null condition
+flux_shape = 1.5; %null condition
 % flux_shape = -1; %null condition
 
 % pre-define vectors for initial infected and recovered (dead) coral cover
@@ -1110,157 +1127,157 @@ Cend = [
 cmap_I = stackedColormap(breakpoints, Cstart, Cend, 256, [1 1 1 1]);
 cmap_R = stackedColormap(breakpoints, Cstart, Cend, 256, [1 1 1 1]);
 
-% % Create figure (no renderer specification - MATLAB handles automatically)
-% f = figure('Position', [10 10 1400 1000]);
-% set(f, 'nextplot', 'replacechildren'); 
-% 
-% % Create 2x2 layout
-% T = tiledlayout(2,2, 'TileSpacing', 'compact', 'Padding', 'compact');
-% 
-% % Initialize plots
-% %
-% % absolute infected coral cover
-% axv1 = nexttile(T,1);
-%     h1 = scatter(axv1, locations(:,1), locations(:,2), 7, I_total_output_days(1,:)', 'filled');
-%     colormap(axv1, cmap_I);
-%     clim([0 .01]);
-%     c1 = colorbar(axv1);
-%     axis equal
-% 
-% % relative infected coral cover
-% axv2 = nexttile(T,2);
-%     h2 = scatter(axv2, locations(:,1), locations(:,2), 7, I_total_output_days(1,:)'./N_site(:), 'filled');
-%     colormap(axv2, cmap_I);
-%     clim([0 .01]);
-%     c2 = colorbar(axv2);
-%     axis equal 
-% 
-% % absolute removed coral cover
-% axv3 = nexttile(T,3);
-%     h3 = scatter(axv3, locations(:,1), locations(:,2), 7, N_site(:)-S_total_output_days(1,:)', 'filled');
-%     c3 = colorbar(axv3);
-%     clim([0 1]);
-%     colormap(axv3, cmap_R)
-%     axis equal
-% 
-% % relative removed coral cover
-% axv4 = nexttile(T,4);
-%     h4 = scatter(axv4, locations(:,1), locations(:,2), 7, (N_site(:)-S_total_output_days(1,:)')./N_site(:), 'filled');
-%     c4 = colorbar(axv4);
-%     clim([0 1]);
-%     colormap(axv4, cmap_R)
-%     axis equal
-% 
-% % Create video writer with MPEG-4 format
-% vidname = sprintf('DisVid_Diagnostic_thresh%d_scale%.1f_shape%.3f', ...
-%                   export_thresh, flux_scale, flux_shape);
-% v = VideoWriter(fullfile(seascapePath, vidname), 'MPEG-4');
-% v.Quality = 95;  % 0-100, higher = better quality but larger file
-% v.FrameRate = 5;
-% open(v);
-% 
-% % Threshold for disease front boundary
-% %   - this is saying that only once 0.1% cover within a site (patch) has
-% %       been removed, is that site considered "observable" to, for example,
-% %       the naked eye of strike team divers in the water within that ~0.4
-% %       m2 grid square
-% removed_cover_thresh = 0.001; % in proportion 0 to 1 (not 0-100%)
-% 
-% % Determine how many days actually simulated
-% num_days = size(I_total_output_days, 1);
-% fprintf('Creating animation for %d days of simulation\n', num_days);
-% 
-% % Generate animation frames
-% for k = 1:1:num_days
-%     % Calculate date based on reference date and actual simulation start
-%     Dt = ref + days(tspan(1) + k - 2);  % Uses ref from conn_days calculation
-% 
-%     % Find sites with dead coral above threshold (disease front)
-%     observable_sick_sites = R_total_output_days(k,:) >= removed_cover_thresh;
-%     if sum(observable_sick_sites) >= 3  % Need at least 3 points for boundary
-%         locs_sick_sites = locations(observable_sick_sites,:);
-%         try
-%             bounds_sick_sites = boundary(locs_sick_sites(:,1), locs_sick_sites(:,2), 0.7);
-%             draw_boundary = true;
-%         catch
-%             draw_boundary = false;  % Not enough points or other issue
-%         end
-%     else
-%         draw_boundary = false;
-%     end
-% 
-%     % Update plot 1: Disease prevalence (absolute % cover of site which is infected)
-%     set(h1, 'CData', I_total_output_days(k,:)');
-%     if draw_boundary
-%         p1 = patch(axv1, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
-%                    'EdgeColor', 'r', 'FaceAlpha', 0.2);
-%     end
-%     %
-%     title(axv1, 'Infected cover of seafloor (%)', ...
-%           sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-%     colormap(axv1, cmap_I);
-%     clim([0 .01]);
-%     axis equal
-% 
-%     % Update plot 2: Disease prevalence (relative % cover of site which is infected)
-%     set(h2, 'CData', I_total_output_days(k,:)'./N_site(:));
-%     if draw_boundary
-%         p2 = patch(axv2, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
-%                    'EdgeColor', 'r', 'FaceAlpha', 0.2);
-%     end
-%     %
-%     title(axv2, 'Relative cover of infected coral (%)', ...
-%           sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-%     colormap(axv2, cmap_I);
-%     clim([0 .1]);
-%     axis equal
-% 
-%     % Update plot 3: Total coral cover lost
-%     set(h3, 'CData', (N_site(:)-S_total_output_days(k,:)'));
-%     if draw_boundary
-%         p3 = patch(axv3, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
-%                    'EdgeColor', 'r', 'FaceAlpha', 0.2);
-%     end
-%     %
-%     title(axv3, 'Removed cover of seafloor (%)', ...
-%           sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-%     clim([0 1]);
-%     colormap(axv3, cmap_R)
-%     axis equal
-% 
-%     % Update plot 4: Proportion coral cover lost
-%     set(h4, 'CData', (N_site(:)-S_total_output_days(k,:)')./N_site(:));
-%     if draw_boundary
-%         p4 = patch(axv4, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
-%                    'EdgeColor', 'r', 'FaceAlpha', 0.2);
-%     end
-%     %
-%     title(axv4, 'Relative cover of removed coral (%)', ...
-%           sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-%     clim([0 1]);
-%     colormap(axv4, cmap_R)
-%     axis equal
-% 
-%     % Capture frame and write to video
-%     F = getframe(f);
-%     writeVideo(v, F);
-% 
-%     % Clean up patches for next frame
-%     if draw_boundary
-%         delete(p1)
-%         delete(p2)
-%         delete(p3)
-%         delete(p4)
-%     end
-% 
-%     % Progress indicator every 10 days
-%     if mod(k, 10) == 0
-%         fprintf('  Frame %d/%d\n', k, num_days);
-%     end
-% end
-% 
-% close(v);
-% fprintf('Animation saved as: %s.mp4\n', vidname);
+% Create figure (no renderer specification - MATLAB handles automatically)
+f = figure('Position', [10 10 1400 1000]);
+set(f, 'nextplot', 'replacechildren'); 
+
+% Create 2x2 layout
+T = tiledlayout(2,2, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+% Initialize plots
+%
+% absolute infected coral cover
+axv1 = nexttile(T,1);
+    h1 = scatter(axv1, locations(:,1), locations(:,2), 7, I_total_output_days(1,:)', 'filled');
+    colormap(axv1, cmap_I);
+    clim([0 .01]);
+    c1 = colorbar(axv1);
+    axis equal
+
+% relative infected coral cover
+axv2 = nexttile(T,2);
+    h2 = scatter(axv2, locations(:,1), locations(:,2), 7, I_total_output_days(1,:)'./N_site(:), 'filled');
+    colormap(axv2, cmap_I);
+    clim([0 .01]);
+    c2 = colorbar(axv2);
+    axis equal 
+
+% absolute removed coral cover
+axv3 = nexttile(T,3);
+    h3 = scatter(axv3, locations(:,1), locations(:,2), 7, N_site(:)-S_total_output_days(1,:)', 'filled');
+    c3 = colorbar(axv3);
+    clim([0 1]);
+    colormap(axv3, cmap_R)
+    axis equal
+
+% relative removed coral cover
+axv4 = nexttile(T,4);
+    h4 = scatter(axv4, locations(:,1), locations(:,2), 7, (N_site(:)-S_total_output_days(1,:)')./N_site(:), 'filled');
+    c4 = colorbar(axv4);
+    clim([0 1]);
+    colormap(axv4, cmap_R)
+    axis equal
+
+% Create video writer with MPEG-4 format
+vidname = sprintf('DisVid_Diagnostic_thresh%d_scale%.1f_shape%.3f', ...
+                  export_thresh, flux_scale, flux_shape);
+v = VideoWriter(fullfile(seascapePath, vidname), 'MPEG-4');
+v.Quality = 95;  % 0-100, higher = better quality but larger file
+v.FrameRate = 5;
+open(v);
+
+% Threshold for disease front boundary
+%   - this is saying that only once 0.1% cover within a site (patch) has
+%       been removed, is that site considered "observable" to, for example,
+%       the naked eye of strike team divers in the water within that ~0.4
+%       m2 grid square
+removed_cover_thresh = 0.001; % in proportion 0 to 1 (not 0-100%)
+
+% Determine how many days actually simulated
+num_days = size(I_total_output_days, 1);
+fprintf('Creating animation for %d days of simulation\n', num_days);
+
+% Generate animation frames
+for k = 1:1:num_days
+    % Calculate date based on reference date and actual simulation start
+    Dt = ref + days(tspan(1) + k - 2);  % Uses ref from conn_days calculation
+
+    % Find sites with dead coral above threshold (disease front)
+    observable_sick_sites = R_total_output_days(k,:) >= removed_cover_thresh;
+    if sum(observable_sick_sites) >= 3  % Need at least 3 points for boundary
+        locs_sick_sites = locations(observable_sick_sites,:);
+        try
+            bounds_sick_sites = boundary(locs_sick_sites(:,1), locs_sick_sites(:,2), 0.7);
+            draw_boundary = true;
+        catch
+            draw_boundary = false;  % Not enough points or other issue
+        end
+    else
+        draw_boundary = false;
+    end
+
+    % Update plot 1: Disease prevalence (absolute % cover of site which is infected)
+    set(h1, 'CData', I_total_output_days(k,:)');
+    if draw_boundary
+        p1 = patch(axv1, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
+                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
+    end
+    %
+    title(axv1, 'Infected cover of seafloor (%)', ...
+          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
+    colormap(axv1, cmap_I);
+    clim([0 .01]);
+    axis equal
+
+    % Update plot 2: Disease prevalence (relative % cover of site which is infected)
+    set(h2, 'CData', I_total_output_days(k,:)'./N_site(:));
+    if draw_boundary
+        p2 = patch(axv2, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
+                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
+    end
+    %
+    title(axv2, 'Relative cover of infected coral (%)', ...
+          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
+    colormap(axv2, cmap_I);
+    clim([0 .1]);
+    axis equal
+
+    % Update plot 3: Total coral cover lost
+    set(h3, 'CData', (N_site(:)-S_total_output_days(k,:)'));
+    if draw_boundary
+        p3 = patch(axv3, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
+                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
+    end
+    %
+    title(axv3, 'Removed cover of seafloor (%)', ...
+          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
+    clim([0 1]);
+    colormap(axv3, cmap_R)
+    axis equal
+
+    % Update plot 4: Proportion coral cover lost
+    set(h4, 'CData', (N_site(:)-S_total_output_days(k,:)')./N_site(:));
+    if draw_boundary
+        p4 = patch(axv4, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
+                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
+    end
+    %
+    title(axv4, 'Relative cover of removed coral (%)', ...
+          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
+    clim([0 1]);
+    colormap(axv4, cmap_R)
+    axis equal
+
+    % Capture frame and write to video
+    F = getframe(f);
+    writeVideo(v, F);
+
+    % Clean up patches for next frame
+    if draw_boundary
+        delete(p1)
+        delete(p2)
+        delete(p3)
+        delete(p4)
+    end
+
+    % Progress indicator every 10 days
+    if mod(k, 10) == 0
+        fprintf('  Frame %d/%d\n', k, num_days);
+    end
+end
+
+close(v);
+fprintf('Animation saved as: %s.mp4\n', vidname);
 
 
 
