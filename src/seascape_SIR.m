@@ -571,11 +571,20 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 % values can't go negative in 'opts'
 %   - include ALL sites; seed at 15+ sites around flat; [new removal method; use 'negative' in opts]
 %   - seed_frac = 0.00001;
-%   - export_thresh = 0.000020;
+%   - export_thresh = 0.000025;
 %   - I0 = 0.0000008; tau = I0 / 10;
 %   - flux_scale = 1;
+%   - flux_shape = 0.001;
+%
+% this is essentially just above but a stress test to show explosion to
+% more final state
+%   - include ALL sites; seed at 15+ sites around flat; [new removal method; use 'negative' in opts]
+%   - seed_frac = 0.00001;
+%   - export_thresh = 0;
+%   - I0 = 0.0000008; tau = I0 / 10; % NOTE: 0.00000101; tau = I0 / 10; is
+%   less explosive in the end but still too much...and starts too slow
+%   - flux_scale = 1;
 %   - flux_shape = 1.5;
-
 
 
 % define how to seed disease at Flat Cay (or wherever chosen starting
@@ -593,12 +602,12 @@ seed_frac = 0.00001;
 %   cover of a site / its susceptibility groups. or outbreak
 %   stage/intensity
 % export_thresh = 0.0003;
-% export_thresh = 0; %null condition
+export_thresh = 0; %null condition
 % export_thresh = 999;
 % export_thresh = 0.00001;
 % export_thresh = 0.00002;
 % export_thresh = 0.00005;
-export_thresh = 0.000025;
+% export_thresh = 0.000025;
 % export_thresh = 0.00002;
 
 %flam1
@@ -625,13 +634,14 @@ export_thresh = 0.000025;
 % I0 = 0.000003; tau = I0 / 10; % too low suppression - disease plays out solely based on connectivity
 % I0 = 0.000006; tau = I0 / 5; % too low suppresion - maybe slightly suppressed compared to null though ?
 % I0 = 0.001; tau = I0 / 10; %0.001 go back to if need
-I0 = 0.0000008; tau = I0 / 10;
+% I0 = 0.0000008; tau = I0 / 10;
 % I0 = 0.0000001; tau = I0 / 10;
 % I0 = 0.0000007; tau = I0 / 10;
 % I0 = 0.000000775; tau = I0 / 10;
-% I0 = 0.000001; tau = I0 / 10; % TRY THIS AGAIN IF NOT SPREADING ENOUGH
+% I0 = 0.0000009; tau = I0 / 10;
 % I0 = 0.00000101; tau = I0 / 10;
-% I0 = 0.00000105; tau = I0 / 10; %strangely maybe worked ????
+% I0 = 0.00000105; tau = I0 / 10;
+I0 = 0.000002; tau = I0 / 10;
 
 % reshape parameters for controlling the contribution of upstream disease
 % mass to local disease pool in each patch (site)
@@ -639,10 +649,10 @@ I0 = 0.0000008; tau = I0 / 10;
 flux_scale = 1; % limits max, ranges 0:1. can be used for null condition, but is the default for shaping flux too. best to leave unchanged for now
 % flux_scale = 0; % limits max, ranges 0:1
 % flux_shape = -4; % this, with everything else (I0, tau, export_thresh) null, started producing something interesting. slightly slower outbreak
-flux_shape = 0.001; %null condition
+% flux_shape = 0.001; %null condition
 % flux_shape = 10;
 % flux_shape = -3;
-% flux_shape = 1.5; %null condition
+flux_shape = 3; %null condition
 % flux_shape = -1; %null condition
 
 % pre-define vectors for initial infected and recovered (dead) coral cover

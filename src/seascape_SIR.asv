@@ -484,7 +484,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %    The below combo I think is a good starting point for beginning to
 %     "slow down" the outbreak! This is using rate-based option (see ODE
 %     function), and Dobbelaere-based transmission smooth
-%   - include all sites; seed at 5 Flat sites; [old removal method]
+%   - include all sites; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.00001;
 %   - I0 = 0.3 * 0.00001; tau = I0 / 10; % ACTUALLY THIS HAD I0 OFF!
@@ -492,7 +492,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   - flux_shape = -3;
 %
 % this below one was similar maybe?
-%   - include all sites; seed at 5 Flat sites; [old removal method]
+%   - include all sites; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
 %   - seed_frac = 0.0001;
 %   - export_thresh = 0.00002;
 %   - I0 = 0.3 * 0.00001; tau = I0 / 10; % ACTUALLY THIS HAD I0 OFF!
@@ -500,7 +500,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   - flux_shape = -3;
 %
 % keep an eye on this one
-%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method]
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.3 * 0.00001; tau = I0 / 10; % ACTUALLY THIS HAD I0 OFF!
@@ -509,7 +509,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %
 % starting to get there!! WAIT hold on it seems like I0 is doing literally
 % nothing
-%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method]
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.000008; tau = I0 / 10; % ACTUALLY THIS HAD I0 OFF!
@@ -518,7 +518,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %
 % really tamped down infection here. seems to suggest negative flux_shape
 % may not be a good thing
-%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method]
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.0000003; tau = I0 / 2;
@@ -526,7 +526,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   - flux_shape = -3;
 %
 % ran this for full year and still got runaway-disease. but seems promising
-%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method]
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.0000003; tau = I0 / 2;
@@ -534,7 +534,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   - flux_shape = 0.001;
 %
 % WOO!! this one seems like a winner! [but note takes WHILE to "take off"
-%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method]
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.0000008; tau = I0 / 10;
@@ -543,7 +543,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %
 % interesting test here! still takes a long time to take off but maybe more
 % realistic
-%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method]
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.0000007; tau = I0 / 10;
@@ -556,7 +556,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 % between (including STT northeast end). could try tweaking flux_shape to
 % something positive? it's possible that weak connections are getting
 % discarded too easily. and maybe also adjusting I0/tau
-%   - include ALL sites; seed at 5 Flat sites; [old removal method]
+%   - include ALL sites; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.0000008; tau = I0 / 10;
@@ -567,8 +567,9 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 % necessarily help a ton (though I've left it here). also, seeding in
 % December doesn't seem to make a huge dent but left here. what is
 % interesting, is leaving all sites in, and I also went in and tried
-% something to make sure removal was working correctly. 
-%   - include ALL sites; seed at 5 Flat sites
+% something to make sure removal was working correctly. and made sure
+% values can't go negative in 'opts'
+%   - include ALL sites; seed at 15+ sites around flat; [new removal method; use 'negative' in opts]
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.0000008; tau = I0 / 10;
@@ -597,7 +598,7 @@ seed_frac = 0.00001;
 % export_thresh = 0.00001;
 % export_thresh = 0.00002;
 % export_thresh = 0.00005;
-export_thresh = 0.000025;
+% export_thresh = 0.000025;
 % export_thresh = 0.00002;
 
 %flam1
@@ -624,12 +625,13 @@ export_thresh = 0.000025;
 % I0 = 0.000003; tau = I0 / 10; % too low suppression - disease plays out solely based on connectivity
 % I0 = 0.000006; tau = I0 / 5; % too low suppresion - maybe slightly suppressed compared to null though ?
 % I0 = 0.001; tau = I0 / 10; %0.001 go back to if need
-% I0 = 0.0000008; tau = I0 / 10;
+I0 = 0.0000008; tau = I0 / 10;
 % I0 = 0.0000001; tau = I0 / 10;
 % I0 = 0.0000007; tau = I0 / 10;
 % I0 = 0.000000775; tau = I0 / 10;
 % I0 = 0.000001; tau = I0 / 10; % TRY THIS AGAIN IF NOT SPREADING ENOUGH
-I0 = 0.00000103; tau = I0 / 10;
+% I0 = 0.00000101; tau = I0 / 10;
+% I0 = 0.00000105; tau = I0 / 10; %strangely maybe worked ????
 
 % reshape parameters for controlling the contribution of upstream disease
 % mass to local disease pool in each patch (site)
@@ -637,10 +639,10 @@ I0 = 0.00000103; tau = I0 / 10;
 flux_scale = 1; % limits max, ranges 0:1. can be used for null condition, but is the default for shaping flux too. best to leave unchanged for now
 % flux_scale = 0; % limits max, ranges 0:1
 % flux_shape = -4; % this, with everything else (I0, tau, export_thresh) null, started producing something interesting. slightly slower outbreak
-% flux_shape = 0.001; %null condition
+flux_shape = 0.001; %null condition
 % flux_shape = 10;
 % flux_shape = -3;
-flux_shape = 1.5; %null condition
+% flux_shape = 1.5; %null condition
 % flux_shape = -1; %null condition
 
 % pre-define vectors for initial infected and recovered (dead) coral cover
