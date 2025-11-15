@@ -164,6 +164,32 @@
   combined <- bind_rows(combined_absences, combined_presences) %>%
     arrange(date)
   
+  # Find the first presence date at each location
+  first_presence <- combined %>%
+    filter(presence %in% c("P", "S")) %>%
+    group_by(lat, lon) %>%
+    summarize(first_presence_date = min(date), .groups = "drop")
+  
+  # Remove absences that occur AFTER the first presence at each location
+  # Keep all absences that occur BEFORE the first presence
+  combined <- combined %>%
+    left_join(first_presence, by = c("lat", "lon")) %>%
+    filter(
+      # Keep if it's not an absence
+      presence != "A" | 
+        # OR keep if it's an absence with no presence at that location
+        is.na(first_presence_date) |
+        # OR keep if it's an absence that occurred before the first presence
+        (presence == "A" & date < first_presence_date)
+    ) %>%
+    select(-first_presence_date)
+  
+  #clean up
+  combined = combined %>%
+    mutate(location = as.factor(location), presence = as.factor(presence), island = as.factor(island),
+           source = as.factor(source))
+
+    
   # Export combined data as CSV
   write.csv(combined, here("output", "combined_coral_data.csv"), row.names = FALSE)
   
@@ -171,6 +197,10 @@
   
   land_vect <- readRDS(here("output", "osm_land_vect.rds"))
   island_df <- readRDS(here("output", "osm_island_labels.rds"))
+  
+  #also export it, for MATLAB use
+  writeVector(land_vect, here("output", "osm_land_vect.shp"), overwrite = TRUE)
+  write.csv(island_df, here("output", "island_labels.csv"), row.names = FALSE)
   
   ################################## Static Map - All Occurrences ##################################
   

@@ -186,6 +186,19 @@ dI_MS = zeros(length(I_MS), 1);
 dI_HS = zeros(length(I_HS), 1);
     dI_HS(HS_active) = rate_tot_HS .* S_HS_active - g_HS * I_HS_active;
 
+% % maybe wrong way to remove coral [old removal method]
+% dR_LS = g_LS * I_LS;
+% dR_MS = g_MS * I_MS;
+% dR_HS = g_HS * I_HS;
+
+% maybe better way to remove coral
+dR_LS = zeros(length(R_LS), 1);
+    dR_LS(LS_active) = g_LS * I_LS_active;
+dR_MS = zeros(length(R_MS), 1);
+    dR_MS(MS_active) = g_MS * I_MS_active;
+dR_HS = zeros(length(R_HS), 1);
+    dR_HS(HS_active) = g_HS * I_HS_active;
+
 % % failsafe to remove at every location
 % recovery_LS = g_LS * I_LS; %calculate recovery for ALL sites (not just active)
 % recovery_MS = g_MS * I_MS; %calculate recovery for ALL sites (not just active)
@@ -199,10 +212,10 @@ dI_HS = zeros(length(I_HS), 1);
 % dI_LS = new_infections_LS - recovery_LS; %combine
 % dI_MS = new_infections_MS - recovery_MS;
 % dI_HS = new_infections_HS - recovery_HS;
-
-dR_LS = g_LS * I_LS;
-dR_MS = g_MS * I_MS;
-dR_HS = g_HS * I_HS;
+% 
+% dR_LS = g_LS * I_LS;
+% dR_MS = g_MS * I_MS;
+% dR_HS = g_HS * I_HS;
 
 f = [dS_LS; dS_MS; dS_HS; dI_LS; dI_MS; dI_HS; dR_LS; dR_MS; dR_HS];
 

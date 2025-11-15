@@ -7,40 +7,38 @@ dataPath = fullfile(projectPath, 'data');
 outputPath = fullfile(projectPath, 'output');
 seascapePath = fullfile(outputPath, 'seascape_SIR');
 
-RECALCULATE_CONNECTIVITY = false;  % Set to false to load from temp/P.mat
+RECALCULATE_CONNECTIVITY = true;  % Set to false to load from temp/P.mat
 RUN_PARAMETER_SWEEP = true;        % Set to false to load from temp/ParameterSweep_Results.mat
 USE_PARALLEL = true;               % Set to true to use parallel computing (requires Parallel Computing Toolbox)
 
 % ===== NEW FILTERING TOGGLES =====
 FILTER_LOW_COVER = false;           % Remove sites with <1% total coral cover
-FILTER_MISSING_GROUPS = false;       % Remove sites with 0% in any susceptibility group
-FILTER_NO_TRAJECTORIES = true;      % Remove sites that never produced trajectories
+FILTER_MISSING_GROUPS = true;      % Remove sites with 0% in any susceptibility group
 % ==================================
 
 % ===== 2018 CONNECTIVITY BACKFILL =====
-USE_2018_BACKFILL = true;           % If true, use Jan 2019 connectivity for any dates before 2019
+USE_2018_BACKFILL = false;           % If true, use Jan 2019 connectivity for any dates before 2019
 % =======================================
 
 % DATE_RANGE = [];  % Empty = create/load all connectivity matrices
-% DATE_RANGE = [datetime(2019,1,1), datetime(2019,3,31)];  % just Q1
+DATE_RANGE = [datetime(2019,1,1), datetime(2019,3,31)];  % just Q1
 % DATE_RANGE = [datetime(2019,1,1), datetime(2019,6,30)];  % Q1-Q2
 % DATE_RANGE = [datetime(2019,1,1), datetime(2019,12,31)];  % Q1-Q4
-DATE_RANGE = [datetime(2018,12,1), datetime(2019,12,31)];  % 2018-2019 example
+% DATE_RANGE = [datetime(2018,12,1), datetime(2019,12,31)];  % 2018-2019 example
 
 %% Load reef data from CSV
 
 reefDataFile = fullfile(dataPath, 'centroids_vertices_FINALFORCMS.csv');
-reefData_original = readtable(reefDataFile);
+reefData = readtable(reefDataFile);
 
 fprintf('========================================\n');
 fprintf('INITIAL REEF DATA\n');
-fprintf('Total sites loaded: %d\n', height(reefData_original));
+fprintf('Total sites loaded: %d\n', height(reefData));
 fprintf('========================================\n\n');
 
-%% STAGE 1: Apply site filtering (Filters A & B - CSV-based only)
+%% Apply site filtering
 
 % Store original indices before filtering
-reefData = reefData_original;
 reefData.original_index = (1:height(reefData))';
 sites_to_keep = true(height(reefData), 1);
 
@@ -74,28 +72,33 @@ end
 
 % Apply filter to reef data
 if FILTER_LOW_COVER || FILTER_MISSING_GROUPS
-    stage1_indices = reefData.original_index(sites_to_keep);
+    original_indices = reefData.original_index(sites_to_keep);
     reefData = reefData(sites_to_keep, :);
     
     fprintf('========================================\n');
-    fprintf('STAGE 1 FILTERING SUMMARY (A & B)\n');
+    fprintf('FILTERING SUMMARY\n');
     fprintf('Original sites: %d\n', length(sites_to_keep));
     fprintf('Filtered sites: %d\n', height(reefData));
     fprintf('Reduction: %.1f%%\n', 100 * (1 - height(reefData)/length(sites_to_keep)));
     fprintf('========================================\n\n');
 else
-    stage1_indices = (1:height(reefData))';
+    original_indices = (1:height(reefData))';
 end
 
-%% STAGE 1 CACHE: Create or load existing connectivity matrices (filters A & B only)
+% Extract reef information
+unique_IDs = reefData.unique_ID;
+locations = [reefData.centroid_lon, reefData.centroid_lat];
+num_sites = height(reefData);
+
+%% Create or load existing connectivity matrices
 
 % Generate connectivity (conn_structs) cache filename based on date range
 if ~isempty(DATE_RANGE)
-    stage1_cacheFilename = sprintf('conn_structs_STAGE1_%s_to_%s', ...
+    cacheFilename = sprintf('conn_structs_%s_to_%s', ...
                            string(DATE_RANGE(1), 'yyyyMMdd'), ...
                            string(DATE_RANGE(2), 'yyyyMMdd'));
 else
-    stage1_cacheFilename = 'conn_structs_STAGE1';  % Full dataset
+    cacheFilename = 'conn_structs';  % Full dataset
 end
 
 % Add filtering suffix to cache filename
@@ -103,20 +106,20 @@ if FILTER_LOW_COVER || FILTER_MISSING_GROUPS
     filter_suffix = '';
     if FILTER_LOW_COVER; filter_suffix = [filter_suffix '_lowcov']; end
     if FILTER_MISSING_GROUPS; filter_suffix = [filter_suffix '_missing']; end
-    stage1_cacheFilename = [stage1_cacheFilename filter_suffix];
+    cacheFilename = [cacheFilename filter_suffix];
 end
 
 % Add 2018 backfill suffix to cache filename
 if USE_2018_BACKFILL && ~isempty(DATE_RANGE) && year(DATE_RANGE(1)) < 2019
-    stage1_cacheFilename = [stage1_cacheFilename '_2018bf'];
+    cacheFilename = [cacheFilename '_2018bf'];
 end
 
-stage1_cacheFilename = [stage1_cacheFilename '.mat'];
-stage1_cacheFilePath = fullfile(tempPath, stage1_cacheFilename);
+cacheFilename = [cacheFilename '.mat'];
+cacheFilePath = fullfile(tempPath, cacheFilename);
 
 if RECALCULATE_CONNECTIVITY
     fprintf('========================================\n');
-    fprintf('STAGE 1: Loading connectivity matrices from disk\n');
+    fprintf('Loading connectivity matrices from disk\n');
     if ~isempty(DATE_RANGE)
         fprintf('Date range filter: %s to %s\n', ...
                 string(DATE_RANGE(1), 'dd-MMM-yyyy'), ...
@@ -128,7 +131,7 @@ if RECALCULATE_CONNECTIVITY
     fprintf('========================================\n\n');
     
     quarters = {'Q1_2019', 'Q2_2019', 'Q3_2019', 'Q4_2019'};
-    conn_structs_stage1 = struct();
+    conn_structs = struct();
     connCount = 0;
 
     % NOTE: decay_weights normalization - currently using fixed value
@@ -183,18 +186,18 @@ if RECALCULATE_CONNECTIVITY
                 warning('Filename date mismatch: %s vs %s', string(Dat, 'dd-MMM-yyyy'), string(Dat_actual, 'dd-MMM-yyyy'));
             end
             
-            conn_structs_stage1(connCount).DY = day(Dat);
-            conn_structs_stage1(connCount).MO = month(Dat);
-            conn_structs_stage1(connCount).YR = year(Dat);
-            conn_structs_stage1(connCount).Date = Dat;
+            conn_structs(connCount).DY = day(Dat);
+            conn_structs(connCount).MO = month(Dat);
+            conn_structs(connCount).YR = year(Dat);
+            conn_structs(connCount).Date = Dat;
             
             conmat = sparse(Con.connectivity_results.ConnMatrix_raw);
             
-            % ===== APPLY SITE FILTERING TO CONNECTIVITY (STAGE 1: A & B ONLY) =====
+            % ===== APPLY SITE FILTERING TO CONNECTIVITY =====
             if FILTER_LOW_COVER || FILTER_MISSING_GROUPS
-                conmat = conmat(stage1_indices, stage1_indices);
+                conmat = conmat(original_indices, original_indices);
             end
-            % =======================================================================
+            % ================================================
             
             % Remove self retention (diagonal)
             conmat = spdiags(zeros(size(conmat,1),1), 0, conmat);
@@ -202,7 +205,7 @@ if RECALCULATE_CONNECTIVITY
             % Normalize
             conmat = conmat ./ norm_val;
             
-            conn_structs_stage1(connCount).full = conmat;
+            conn_structs(connCount).full = conmat;
             
             % Store first 2019 matrix for backfill
             if isempty(first_2019_matrix) && year(Dat) == 2019
@@ -233,11 +236,11 @@ if RECALCULATE_CONNECTIVITY
             connCount = connCount + 1;
             bf_date = backfill_dates(bf_idx);
             
-            conn_structs_stage1(connCount).DY = day(bf_date);
-            conn_structs_stage1(connCount).MO = month(bf_date);
-            conn_structs_stage1(connCount).YR = year(bf_date);
-            conn_structs_stage1(connCount).Date = bf_date;
-            conn_structs_stage1(connCount).full = first_2019_matrix;
+            conn_structs(connCount).DY = day(bf_date);
+            conn_structs(connCount).MO = month(bf_date);
+            conn_structs(connCount).YR = year(bf_date);
+            conn_structs(connCount).Date = bf_date;
+            conn_structs(connCount).full = first_2019_matrix;
             
             fprintf('  [%d] Backfilled: %s (using Jan 1 2019 connectivity)\n', ...
                     connCount, string(bf_date, 'dd-MMM-yyyy'));
@@ -249,206 +252,41 @@ if RECALCULATE_CONNECTIVITY
 
     % Sort by date
     fprintf('Sorting %d matrices by date...\n', connCount);
-    [~, sortIdx] = sort([conn_structs_stage1.Date]);
-    conn_structs_stage1 = conn_structs_stage1(sortIdx);
+    [~, sortIdx] = sort([conn_structs.Date]);
+    conn_structs = conn_structs(sortIdx);
 
-    fprintf('Saving STAGE 1 connectivity data to %s...\n', stage1_cacheFilename);
-    save(stage1_cacheFilePath, 'conn_structs_stage1', 'stage1_indices', '-v7.3')
+    fprintf('Saving processed connectivity data to %s...\n', cacheFilename);
+    save(cacheFilePath, 'conn_structs', 'original_indices', '-v7.3')
     
     fprintf('\n========================================\n');
-    fprintf('STAGE 1 COMPLETE: Loaded %d connectivity matrices\n', connCount);
-    fprintf('Matrix dimensions: %d x %d\n', height(reefData), height(reefData));
+    fprintf('COMPLETE: Loaded %d connectivity matrices\n', connCount);
+    fprintf('Matrix dimensions: %d x %d\n', num_sites, num_sites);
     if ~isempty(DATE_RANGE)
         fprintf('Date range: %s to %s\n', string(DATE_RANGE(1), 'dd-MMM-yyyy'), ...
             string(DATE_RANGE(2), 'dd-MMM-yyyy'));
     end
-    fprintf('Cached to: %s\n', stage1_cacheFilename);
+    fprintf('Cached to: %s\n', cacheFilename);
     fprintf('========================================\n\n');
     
 else
-    % Load pre-calculated connectivity matrices (Stage 1)
+    % Load pre-calculated connectivity matrices
     fprintf('========================================\n');
-    fprintf('STAGE 1: Loading cached connectivity matrices from %s...\n', stage1_cacheFilename);
+    fprintf('Loading cached connectivity matrices from %s...\n', cacheFilename);
     
-    if exist(stage1_cacheFilePath, 'file') == 0
-        error(['Stage 1 cache file not found: %s\n' ...
-               'Set RECALCULATE_CONNECTIVITY = true to generate it.'], stage1_cacheFilePath);
+    if exist(cacheFilePath, 'file') == 0
+        error(['Cache file not found: %s\n' ...
+               'Set RECALCULATE_CONNECTIVITY = true to generate it.'], cacheFilePath);
     end
     
-    load(stage1_cacheFilePath, 'conn_structs_stage1', 'stage1_indices');
-    
-    % Reload original unfiltered data to apply stage1_indices correctly
-    reefData = reefData_original(stage1_indices, :);
-    
-    fprintf('STAGE 1 LOADED: %d connectivity matrices from cache\n', length(conn_structs_stage1));
-    fprintf('Matrix dimensions: %d x %d\n', height(reefData), height(reefData));
+    load(cacheFilePath, 'conn_structs', 'original_indices');
+    fprintf('COMPLETE: Loaded %d connectivity matrices from cache\n', length(conn_structs));
+    fprintf('Matrix dimensions: %d x %d\n', num_sites, num_sites);
     if ~isempty(DATE_RANGE)
         fprintf('Date range: %s to %s\n', ...
-                string(min([conn_structs_stage1.Date]), 'dd-MMM-yyyy'), string(max([conn_structs_stage1.Date]), 'dd-MMM-yyyy'));
+                string(min([conn_structs.Date]), 'dd-MMM-yyyy'), string(max([conn_structs.Date]), 'dd-MMM-yyyy'));
     end
     fprintf('========================================\n\n');
 end
-
-%% STAGE 2: Apply Filter C (trajectory-based filter) and create final connectivity
-
-% Generate final cache filename
-if ~isempty(DATE_RANGE)
-    final_cacheFilename = sprintf('conn_structs_FINAL_%s_to_%s', ...
-                           string(DATE_RANGE(1), 'yyyyMMdd'), ...
-                           string(DATE_RANGE(2), 'yyyyMMdd'));
-else
-    final_cacheFilename = 'conn_structs_FINAL';
-end
-
-% Add ALL filter suffixes to final cache filename
-if FILTER_LOW_COVER || FILTER_MISSING_GROUPS || FILTER_NO_TRAJECTORIES
-    filter_suffix = '';
-    if FILTER_LOW_COVER; filter_suffix = [filter_suffix '_lowcov']; end
-    if FILTER_MISSING_GROUPS; filter_suffix = [filter_suffix '_missing']; end
-    if FILTER_NO_TRAJECTORIES; filter_suffix = [filter_suffix '_notraj']; end
-    final_cacheFilename = [final_cacheFilename filter_suffix];
-end
-
-if USE_2018_BACKFILL && ~isempty(DATE_RANGE) && year(DATE_RANGE(1)) < 2019
-    final_cacheFilename = [final_cacheFilename '_2018bf'];
-end
-
-final_cacheFilename = [final_cacheFilename '.mat'];
-final_cacheFilePath = fullfile(tempPath, final_cacheFilename);
-
-% Determine if we need to apply trajectory filter
-if RECALCULATE_CONNECTIVITY && FILTER_NO_TRAJECTORIES
-    % Apply trajectory filter to stage 1 data
-    fprintf('\n========================================\n');
-    fprintf('STAGE 2: Applying trajectory filter (Filter C)\n');
-    
-    num_sites_stage1 = height(reefData);
-    
-    % Find reefs that ever had outgoing connections
-    all_sources_ever = false(num_sites_stage1, 1);
-    for i = 1:length(conn_structs_stage1)
-        [src, ~] = find(conn_structs_stage1(i).full);
-        all_sources_ever(unique(src)) = true;
-    end
-    
-    inactive_sources = find(~all_sources_ever);
-    fprintf('Sites removed: %d (%.1f%%)\n', length(inactive_sources), 100*length(inactive_sources)/num_sites_stage1);
-    fprintf('Sites remaining: %d\n', sum(all_sources_ever));
-    
-    if ~isempty(inactive_sources)
-        fprintf('Sample inactive reef IDs: ');
-        fprintf('%d ', reefData.unique_ID(inactive_sources(1:min(10, length(inactive_sources)))));
-        fprintf('...\n');
-    end
-    
-    % Create stage 2 filter mask (relative to stage 1)
-    stage2_filter_mask = all_sources_ever;
-    
-    % Update reef data
-    reefData = reefData(stage2_filter_mask, :);
-    
-    % Create final indices (relative to original data)
-    final_indices = stage1_indices(stage2_filter_mask);
-    
-    % Apply trajectory filter to all connectivity matrices
-    conn_structs = struct();
-    for i = 1:length(conn_structs_stage1)
-        conn_structs(i).DY = conn_structs_stage1(i).DY;
-        conn_structs(i).MO = conn_structs_stage1(i).MO;
-        conn_structs(i).YR = conn_structs_stage1(i).YR;
-        conn_structs(i).Date = conn_structs_stage1(i).Date;
-        conn_structs(i).full = conn_structs_stage1(i).full(stage2_filter_mask, stage2_filter_mask);
-    end
-    
-    fprintf('========================================\n\n');
-    
-    % Save final cache
-    fprintf('Saving FINAL connectivity data to %s...\n', final_cacheFilename);
-    save(final_cacheFilePath, 'conn_structs', 'final_indices', '-v7.3')
-    
-    fprintf('\n========================================\n');
-    fprintf('STAGE 2 COMPLETE\n');
-    fprintf('Final matrix dimensions: %d x %d\n', height(reefData), height(reefData));
-    fprintf('Cached to: %s\n', final_cacheFilename);
-    fprintf('========================================\n\n');
-    
-elseif ~RECALCULATE_CONNECTIVITY
-    % Try to load final cache
-    fprintf('========================================\n');
-    fprintf('Attempting to load FINAL cache: %s\n', final_cacheFilename);
-    
-    if exist(final_cacheFilePath, 'file')
-        % Final cache exists - load it
-        fprintf('Final cache found! Loading...\n');
-        load(final_cacheFilePath, 'conn_structs', 'final_indices');
-        
-        % Reload and reapply ALL filters to reef data using final_indices
-        reefData = reefData_original(final_indices, :);
-        
-        fprintf('FINAL CACHE LOADED: %d connectivity matrices\n', length(conn_structs));
-        fprintf('Matrix dimensions: %d x %d\n', height(reefData), height(reefData));
-        fprintf('========================================\n\n');
-    else
-        % Final cache doesn't exist
-        fprintf('Final cache not found.\n');
-        
-        if FILTER_NO_TRAJECTORIES
-            % Need to create final cache from stage 1
-            fprintf('Trajectory filter is enabled - creating final cache from stage 1 data...\n');
-            
-            num_sites_stage1 = size(conn_structs_stage1(1).full, 1);
-            all_sources_ever = false(num_sites_stage1, 1);
-            for i = 1:length(conn_structs_stage1)
-                [src, ~] = find(conn_structs_stage1(i).full);
-                all_sources_ever(unique(src)) = true;
-            end
-            
-            stage2_filter_mask = all_sources_ever;
-            
-            % Update reef data (currently has stage1 filtering applied)
-            reefData = reefData(stage2_filter_mask, :);
-            final_indices = stage1_indices(stage2_filter_mask);
-            
-            % Create filtered connectivity
-            conn_structs = struct();
-            for i = 1:length(conn_structs_stage1)
-                conn_structs(i).DY = conn_structs_stage1(i).DY;
-                conn_structs(i).MO = conn_structs_stage1(i).MO;
-                conn_structs(i).YR = conn_structs_stage1(i).YR;
-                conn_structs(i).Date = conn_structs_stage1(i).Date;
-                conn_structs(i).full = conn_structs_stage1(i).full(stage2_filter_mask, stage2_filter_mask);
-            end
-            
-            % Save final cache
-            save(final_cacheFilePath, 'conn_structs', 'final_indices', '-v7.3')
-            fprintf('Final cache created and saved.\n');
-        else
-            % Trajectory filter disabled - use stage 1 as final
-            fprintf('Trajectory filter is disabled - using stage 1 as final.\n');
-            conn_structs = conn_structs_stage1;
-            final_indices = stage1_indices;
-        end
-        fprintf('========================================\n\n');
-    end
-else
-    % RECALCULATE=true but FILTER_NO_TRAJECTORIES=false
-    % Just use stage 1 as final
-    conn_structs = conn_structs_stage1;
-    final_indices = stage1_indices;
-    fprintf('Trajectory filter disabled - using Stage 1 as final connectivity.\n\n');
-end
-
-%% Extract final reef information (after all filtering is complete)
-
-unique_IDs = reefData.unique_ID;
-locations = [reefData.centroid_lon, reefData.centroid_lat];
-num_sites = height(reefData);
-
-fprintf('\n=== FINAL FILTERING SUMMARY ===\n');
-fprintf('Original sites: %d\n', height(reefData_original));
-fprintf('Final sites: %d\n', num_sites);
-fprintf('Total reduction: %.1f%%\n', 100 * (1 - num_sites/height(reefData_original)));
-fprintf('================================\n\n');
 
 fprintf('\n=== CONNECTIVITY DIAGNOSTICS ===\n');
 first_matrix = conn_structs(1).full;
@@ -465,10 +303,7 @@ fprintf('================================\n\n');
 % Define day vector for SIR function (days since Jan 1, or other defined
 % reference start date)
 dates = [conn_structs.Date];
-
-% Set reference date to the earliest date in the connectivity data
-% This ensures conn_days starts at 0 (or close to it) rather than having negative values
-ref = min(dates);  
+ref = datetime(2019,1,1);  
 conn_days = days(dates - ref);
 
 %% set state variables & parameters
@@ -484,7 +319,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %    The below combo I think is a good starting point for beginning to
 %     "slow down" the outbreak! This is using rate-based option (see ODE
 %     function), and Dobbelaere-based transmission smooth
-%   - include all sites; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
+%   - include all sites; seed at 5 Flat sites
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.00001;
 %   - I0 = 0.3 * 0.00001; tau = I0 / 10; % ACTUALLY THIS HAD I0 OFF!
@@ -492,7 +327,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   - flux_shape = -3;
 %
 % this below one was similar maybe?
-%   - include all sites; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
+%   - include all sites; seed at 5 Flat sites
 %   - seed_frac = 0.0001;
 %   - export_thresh = 0.00002;
 %   - I0 = 0.3 * 0.00001; tau = I0 / 10; % ACTUALLY THIS HAD I0 OFF!
@@ -500,7 +335,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   - flux_shape = -3;
 %
 % keep an eye on this one
-%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.3 * 0.00001; tau = I0 / 10; % ACTUALLY THIS HAD I0 OFF!
@@ -509,7 +344,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %
 % starting to get there!! WAIT hold on it seems like I0 is doing literally
 % nothing
-%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.000008; tau = I0 / 10; % ACTUALLY THIS HAD I0 OFF!
@@ -518,7 +353,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %
 % really tamped down infection here. seems to suggest negative flux_shape
 % may not be a good thing
-%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.0000003; tau = I0 / 2;
@@ -526,7 +361,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   - flux_shape = -3;
 %
 % ran this for full year and still got runaway-disease. but seems promising
-%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.0000003; tau = I0 / 2;
@@ -534,7 +369,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   - flux_shape = 0.001;
 %
 % WOO!! this one seems like a winner! [but note takes WHILE to "take off"
-%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.0000008; tau = I0 / 10;
@@ -543,7 +378,7 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %
 % interesting test here! still takes a long time to take off but maybe more
 % realistic
-%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
+%   - include only sites with non-zero cover in each susc. group; seed at 5 Flat sites
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.0000007; tau = I0 / 10;
@@ -556,25 +391,13 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 % between (including STT northeast end). could try tweaking flux_shape to
 % something positive? it's possible that weak connections are getting
 % discarded too easily. and maybe also adjusting I0/tau
-%   - include ALL sites; seed at 5 Flat sites; [old removal method; no 'negative' in opts]
+%   - include ALL sites; seed at 5 Flat sites
 %   - seed_frac = 0.00001;
 %   - export_thresh = 0.000025;
 %   - I0 = 0.0000008; tau = I0 / 10;
 %   - flux_scale = 1;
 %   - flux_shape = 0.001;
-%
-% okay now getting very interesting. if you seed at more sites, doesn't
-% necessarily help a ton (though I've left it here). also, seeding in
-% December doesn't seem to make a huge dent but left here. what is
-% interesting, is leaving all sites in, and I also went in and tried
-% something to make sure removal was working correctly. and made sure
-% values can't go negative in 'opts'
-%   - include ALL sites; seed at 15+ sites around flat; [new removal method; use 'negative' in opts]
-%   - seed_frac = 0.00001;
-%   - export_thresh = 0.000020;
-%   - I0 = 0.0000008; tau = I0 / 10;
-%   - flux_scale = 1;
-%   - flux_shape = 1.5;
+
 
 
 
@@ -599,7 +422,6 @@ seed_frac = 0.00001;
 % export_thresh = 0.00002;
 % export_thresh = 0.00005;
 export_thresh = 0.000025;
-% export_thresh = 0.00002;
 
 %flam1
 
@@ -625,13 +447,10 @@ export_thresh = 0.000025;
 % I0 = 0.000003; tau = I0 / 10; % too low suppression - disease plays out solely based on connectivity
 % I0 = 0.000006; tau = I0 / 5; % too low suppresion - maybe slightly suppressed compared to null though ?
 % I0 = 0.001; tau = I0 / 10; %0.001 go back to if need
-I0 = 0.0000008; tau = I0 / 10;
+% I0 = 0.0000008; tau = I0 / 10;
 % I0 = 0.0000001; tau = I0 / 10;
 % I0 = 0.0000007; tau = I0 / 10;
-% I0 = 0.000000775; tau = I0 / 10;
-% I0 = 0.000001; tau = I0 / 10; % TRY THIS AGAIN IF NOT SPREADING ENOUGH
-% I0 = 0.00000101; tau = I0 / 10;
-% I0 = 0.00000105; tau = I0 / 10; %strangely maybe worked ????
+I0 = 0.000000775; tau = I0 / 10;
 
 % reshape parameters for controlling the contribution of upstream disease
 % mass to local disease pool in each patch (site)
@@ -642,8 +461,7 @@ flux_scale = 1; % limits max, ranges 0:1. can be used for null condition, but is
 flux_shape = 0.001; %null condition
 % flux_shape = 10;
 % flux_shape = -3;
-% flux_shape = 1.5; %null condition
-% flux_shape = -1; %null condition
+% flux_shape = 1; %null condition
 
 % pre-define vectors for initial infected and recovered (dead) coral cover
 I_LS_init = zeros(num_sites,1);
@@ -653,23 +471,22 @@ R_LS_init = zeros(num_sites,1);
 R_MS_init = zeros(num_sites,1);
 R_HS_init = zeros(num_sites,1);
 
-% seed site IDs (surrounding Flat Cay):
-% target_IDs = [29088, 29338, 29089, 29339, 29087];
-target_IDs = [28838, 28839, 29089, 29339, 29338, 29337, 29087, 28587, 28840, 29090, 29091, 29341, 28836, 28856, 28835, 29085, 29086, 29591, 29341, 29091, 29340, 29090];
-target_reef_IDs = find(ismember(reefData.unique_ID, target_IDs));
+% Flat Cay site IDs (29088 is the preferred/primary location):
+target_IDs = [29088, 29338, 29089, 29339, 29087];
+flat_cay_site_IDs = find(ismember(reefData.unique_ID, target_IDs));
 
-if isempty(target_reef_IDs)
+if isempty(flat_cay_site_IDs)
     warning('No Flat Cay sites found in filtered data! Disease will not be seeded.');
 else
     fprintf('========================================\n');
     fprintf('DISEASE SEEDING\n');
-    fprintf('Flat Cay sites found: %d\n', length(target_reef_IDs));
-    fprintf('Site IDs: %s\n', num2str(reefData.unique_ID(target_reef_IDs)'));
+    fprintf('Flat Cay sites found: %d\n', length(flat_cay_site_IDs));
+    fprintf('Site IDs: %s\n', num2str(reefData.unique_ID(flat_cay_site_IDs)'));
     fprintf('========================================\n\n');
     
-    I_HS_init(target_reef_IDs) = seed_frac * N_HS(target_reef_IDs);
-    I_MS_init(target_reef_IDs) = seed_frac * N_MS(target_reef_IDs);
-    I_LS_init(target_reef_IDs) = seed_frac * N_LS(target_reef_IDs);
+    I_HS_init(flat_cay_site_IDs) = seed_frac * N_HS(flat_cay_site_IDs);
+    I_MS_init(flat_cay_site_IDs) = seed_frac * N_MS(flat_cay_site_IDs);
+    I_LS_init(flat_cay_site_IDs) = seed_frac * N_LS(flat_cay_site_IDs);
 end
 
 % Pre-define vectors for initial susceptible coral cover
@@ -704,29 +521,16 @@ g_HS = 3.33;
 
 %% serial test model run
 
-% opts = odeset('OutputFcn', @odeWaitbar);
-% opts = odeset('OutputFcn', @odeWaitbar, ...
-%               'RelTol', 1e-8, ...     % Much tighter (default 1e-3)
-%               'AbsTol', 1e-10, ...    % Much tighter (default 1e-6)
-%               'NonNegative', 1:length(Y0));  % CRITICAL: Force non-negative
-opts = odeset('OutputFcn', @odeWaitbar, ...
-              'NonNegative', 1:length(Y0));
-
-% Calculate tspan based on DATE_RANGE (if specified) or default to 365 days
-if ~isempty(DATE_RANGE)
-    simulation_days = days(DATE_RANGE(2) - DATE_RANGE(1)) + 1;
-    tspan = [1 simulation_days];
-else
-    tspan = [1 365];  % Default to 1 year if no DATE_RANGE specified
-end 
+opts = odeset('OutputFcn', @odeWaitbar);
+tspan = [1 365]; 
 
 % Informational: last connectivity file will be reused through end of simulation
-max_conn_day = round(days(max([conn_structs.Date]) - ref));
+max_conn_day = round(days(max([conn_structs.Date]) - datetime(2019,1,1)));
 
 if tspan(end) > max_conn_day
     fprintf('\n*** CONNECTIVITY INFO ***\n');
     fprintf('Simulation runs through day %d (%s)\n', ...
-            tspan(end), string(ref + days(tspan(end)), 'dd-MMM-yyyy'));
+            tspan(end), string(datetime(2019,1,1) + tspan(end), 'dd-MMM-yyyy'));
     fprintf('Last connectivity file starts day %d (%s)\n', ...
             max_conn_day, string(max([conn_structs.Date]), 'dd-MMM-yyyy'));
     fprintf('This file will be reused for days %d-%d\n', max_conn_day, tspan(end));
@@ -748,8 +552,7 @@ fprintf('========================================\n\n');
 clear Y t
 tic
 % [t,Y] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days), tspan, Y0, opts);
-[t,Y] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days,I0,tau), tspan, Y0, opts);
-elapsed = toc;
+[t,Y] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days,I0,tau), tspan, Y0, opts);elapsed = toc;
 
 fprintf('\n========================================\n');
 fprintf('SOLVER COMPLETE\n');
@@ -757,9 +560,6 @@ fprintf('Elapsed time: %.1f seconds\n', elapsed);
 fprintf('Time points: %d\n', length(t));
 fprintf('Final simulation day: %.1f\n', t(end));
 fprintf('========================================\n\n');
-
-
-
 
 %% POST-SERIAL-RUN DIAGNOSTICS (before parameter sweep)
 
@@ -778,14 +578,14 @@ initial_flux = incomingRisk_sparse(conn_structs(1).full, P_initial, export_thres
 initial_flux_reshaped = flux_scale .* (1 - exp(-flux_shape .* initial_flux)) / (1 - exp(-flux_shape));
 
 % Check at seed sites
-fprintf('Seed sites (IDs: %s):\n', mat2str(unique_IDs(target_reef_IDs)));
+fprintf('Seed sites (IDs: %s):\n', mat2str(unique_IDs(flat_cay_site_IDs)));
 fprintf('  Raw incoming flux range: [%.6f, %.6f]\n', ...
-    min(initial_flux(target_reef_IDs)), max(initial_flux(target_reef_IDs)));
+    min(initial_flux(flat_cay_site_IDs)), max(initial_flux(flat_cay_site_IDs)));
 fprintf('  Reshaped incoming flux range: [%.6f, %.6f]\n', ...
-    min(initial_flux_reshaped(target_reef_IDs)), max(initial_flux_reshaped(target_reef_IDs)));
+    min(initial_flux_reshaped(flat_cay_site_IDs)), max(initial_flux_reshaped(flat_cay_site_IDs)));
 
 % Check at nearby non-seed sites (within 5 km of seed sites)
-seed_locs = locations(target_reef_IDs, :);
+seed_locs = locations(flat_cay_site_IDs, :);
 distances = pdist2(locations, seed_locs);
 min_dist = min(distances, [], 2);
 nearby_sites = find(min_dist < 5000 & min_dist > 0);  % 5 km radius, excluding seed sites
@@ -846,9 +646,8 @@ R_LS_output_days = interp1(t,R_LS_output,tspan(1):tspan(2));
 R_MS_output_days = interp1(t,R_MS_output,tspan(1):tspan(2));
 R_HS_output_days = interp1(t,R_HS_output,tspan(1):tspan(2));
 
-% Pick seed site for analysis
-% example_site = flat_cay_site_IDs(1);
-example_site = target_reef_IDs(min(2, length(target_reef_IDs)));
+% Pick first seed site for analysis
+example_site = flat_cay_site_IDs(1);
 
 % Calculate totals for mass balance
 total_S_temp = S_LS_output_days(:,example_site) + S_MS_output_days(:,example_site) + S_HS_output_days(:,example_site);
@@ -867,15 +666,15 @@ fprintf('===============================\n\n');
 figure('Name', 'Serial Run - Post-Run Diagnostics');
 
 subplot(2,2,1);
-I_total_at_seeds_temp = I_LS_output_days(:, target_reef_IDs) + I_MS_output_days(:, target_reef_IDs) + I_HS_output_days(:, target_reef_IDs);
+I_total_at_seeds_temp = I_LS_output_days(:, flat_cay_site_IDs) + I_MS_output_days(:, flat_cay_site_IDs) + I_HS_output_days(:, flat_cay_site_IDs);
 plot(I_total_at_seeds_temp, 'LineWidth', 1.5);
 xlabel('Day'); ylabel('Infected coral cover');
 title('Infection trajectory at seed sites');
-legend(arrayfun(@(x) sprintf('Site %d', unique_IDs(x)), target_reef_IDs, 'UniformOutput', false), 'Location', 'best');
+legend(arrayfun(@(x) sprintf('Site %d', unique_IDs(x)), flat_cay_site_IDs, 'UniformOutput', false), 'Location', 'best');
 grid on;
 
 subplot(2,2,2);
-P_at_seeds_temp = I_LS_output_days(:,target_reef_IDs) + I_MS_output_days(:,target_reef_IDs) + I_HS_output_days(:,target_reef_IDs);
+P_at_seeds_temp = I_LS_output_days(:,flat_cay_site_IDs) + I_MS_output_days(:,flat_cay_site_IDs) + I_HS_output_days(:,flat_cay_site_IDs);
 plot(P_at_seeds_temp, 'LineWidth', 1.5);
 xlabel('Day'); ylabel('Disease pool (P)');
 title('Disease pool at seed sites');
@@ -1100,157 +899,156 @@ Cend = [
 cmap_I = stackedColormap(breakpoints, Cstart, Cend, 256, [1 1 1 1]);
 cmap_R = stackedColormap(breakpoints, Cstart, Cend, 256, [1 1 1 1]);
 
-% % Create figure (no renderer specification - MATLAB handles automatically)
-% f = figure('Position', [10 10 1400 1000]);
-% set(f, 'nextplot', 'replacechildren'); 
-% 
-% % Create 2x2 layout
-% T = tiledlayout(2,2, 'TileSpacing', 'compact', 'Padding', 'compact');
-% 
-% % Initialize plots
-% %
-% % absolute infected coral cover
-% axv1 = nexttile(T,1);
-%     h1 = scatter(axv1, locations(:,1), locations(:,2), 7, I_total_output_days(1,:)', 'filled');
-%     colormap(axv1, cmap_I);
-%     clim([0 .01]);
-%     c1 = colorbar(axv1);
-%     axis equal
-% 
-% % relative infected coral cover
-% axv2 = nexttile(T,2);
-%     h2 = scatter(axv2, locations(:,1), locations(:,2), 7, I_total_output_days(1,:)'./N_site(:), 'filled');
-%     colormap(axv2, cmap_I);
-%     clim([0 .01]);
-%     c2 = colorbar(axv2);
-%     axis equal 
-% 
-% % absolute removed coral cover
-% axv3 = nexttile(T,3);
-%     h3 = scatter(axv3, locations(:,1), locations(:,2), 7, N_site(:)-S_total_output_days(1,:)', 'filled');
-%     c3 = colorbar(axv3);
-%     clim([0 1]);
-%     colormap(axv3, cmap_R)
-%     axis equal
-% 
-% % relative removed coral cover
-% axv4 = nexttile(T,4);
-%     h4 = scatter(axv4, locations(:,1), locations(:,2), 7, (N_site(:)-S_total_output_days(1,:)')./N_site(:), 'filled');
-%     c4 = colorbar(axv4);
-%     clim([0 1]);
-%     colormap(axv4, cmap_R)
-%     axis equal
-% 
-% % Create video writer with MPEG-4 format
-% vidname = sprintf('DisVid_Diagnostic_thresh%d_scale%.1f_shape%.3f', ...
-%                   export_thresh, flux_scale, flux_shape);
-% v = VideoWriter(fullfile(seascapePath, vidname), 'MPEG-4');
-% v.Quality = 95;  % 0-100, higher = better quality but larger file
-% v.FrameRate = 5;
-% open(v);
-% 
-% % Threshold for disease front boundary
-% %   - this is saying that only once 0.1% cover within a site (patch) has
-% %       been removed, is that site considered "observable" to, for example,
-% %       the naked eye of strike team divers in the water within that ~0.4
-% %       m2 grid square
-% removed_cover_thresh = 0.001; % in proportion 0 to 1 (not 0-100%)
-% 
-% % Determine how many days actually simulated
-% num_days = size(I_total_output_days, 1);
-% fprintf('Creating animation for %d days of simulation\n', num_days);
-% 
-% % Generate animation frames
-% for k = 1:1:num_days
-%     % Calculate date based on reference date and actual simulation start
-%     Dt = ref + days(tspan(1) + k - 2);  % Uses ref from conn_days calculation
-% 
-%     % Find sites with dead coral above threshold (disease front)
-%     observable_sick_sites = R_total_output_days(k,:) >= removed_cover_thresh;
-%     if sum(observable_sick_sites) >= 3  % Need at least 3 points for boundary
-%         locs_sick_sites = locations(observable_sick_sites,:);
-%         try
-%             bounds_sick_sites = boundary(locs_sick_sites(:,1), locs_sick_sites(:,2), 0.7);
-%             draw_boundary = true;
-%         catch
-%             draw_boundary = false;  % Not enough points or other issue
-%         end
-%     else
-%         draw_boundary = false;
-%     end
-% 
-%     % Update plot 1: Disease prevalence (absolute % cover of site which is infected)
-%     set(h1, 'CData', I_total_output_days(k,:)');
-%     if draw_boundary
-%         p1 = patch(axv1, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
-%                    'EdgeColor', 'r', 'FaceAlpha', 0.2);
-%     end
-%     %
-%     title(axv1, 'Infected cover of seafloor (%)', ...
-%           sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-%     colormap(axv1, cmap_I);
-%     clim([0 .01]);
-%     axis equal
-% 
-%     % Update plot 2: Disease prevalence (relative % cover of site which is infected)
-%     set(h2, 'CData', I_total_output_days(k,:)'./N_site(:));
-%     if draw_boundary
-%         p2 = patch(axv2, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
-%                    'EdgeColor', 'r', 'FaceAlpha', 0.2);
-%     end
-%     %
-%     title(axv2, 'Relative cover of infected coral (%)', ...
-%           sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-%     colormap(axv2, cmap_I);
-%     clim([0 .1]);
-%     axis equal
-% 
-%     % Update plot 3: Total coral cover lost
-%     set(h3, 'CData', (N_site(:)-S_total_output_days(k,:)'));
-%     if draw_boundary
-%         p3 = patch(axv3, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
-%                    'EdgeColor', 'r', 'FaceAlpha', 0.2);
-%     end
-%     %
-%     title(axv3, 'Removed cover of seafloor (%)', ...
-%           sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-%     clim([0 1]);
-%     colormap(axv3, cmap_R)
-%     axis equal
-% 
-%     % Update plot 4: Proportion coral cover lost
-%     set(h4, 'CData', (N_site(:)-S_total_output_days(k,:)')./N_site(:));
-%     if draw_boundary
-%         p4 = patch(axv4, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
-%                    'EdgeColor', 'r', 'FaceAlpha', 0.2);
-%     end
-%     %
-%     title(axv4, 'Relative cover of removed coral (%)', ...
-%           sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
-%     clim([0 1]);
-%     colormap(axv4, cmap_R)
-%     axis equal
-% 
-%     % Capture frame and write to video
-%     F = getframe(f);
-%     writeVideo(v, F);
-% 
-%     % Clean up patches for next frame
-%     if draw_boundary
-%         delete(p1)
-%         delete(p2)
-%         delete(p3)
-%         delete(p4)
-%     end
-% 
-%     % Progress indicator every 10 days
-%     if mod(k, 10) == 0
-%         fprintf('  Frame %d/%d\n', k, num_days);
-%     end
-% end
-% 
-% close(v);
-% fprintf('Animation saved as: %s.mp4\n', vidname);
+% Create figure (no renderer specification - MATLAB handles automatically)
+f = figure('Position', [10 10 1400 1000]);
+set(f, 'nextplot', 'replacechildren'); 
+
+% Create 2x2 layout
+T = tiledlayout(2,2, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+% Initialize plots
+%
+% absolute infected coral cover
+axv1 = nexttile(T,1);
+    h1 = scatter(axv1, locations(:,1), locations(:,2), 7, I_total_output_days(1,:)', 'filled');
+    colormap(axv1, cmap_I);
+    clim([0 .01]);
+    c1 = colorbar(axv1);
+    axis equal
+
+% relative infected coral cover
+axv2 = nexttile(T,2);
+    h2 = scatter(axv2, locations(:,1), locations(:,2), 7, I_total_output_days(1,:)'./N_site(:), 'filled');
+    colormap(axv2, cmap_I);
+    clim([0 .01]);
+    c2 = colorbar(axv2);
+    axis equal 
+
+% absolute removed coral cover
+axv3 = nexttile(T,3);
+    h3 = scatter(axv3, locations(:,1), locations(:,2), 7, N_site(:)-S_total_output_days(1,:)', 'filled');
+    c3 = colorbar(axv3);
+    clim([0 1]);
+    colormap(axv3, cmap_R)
+    axis equal
+
+% relative removed coral cover
+axv4 = nexttile(T,4);
+    h4 = scatter(axv4, locations(:,1), locations(:,2), 7, (N_site(:)-S_total_output_days(1,:)')./N_site(:), 'filled');
+    c4 = colorbar(axv4);
+    clim([0 1]);
+    colormap(axv4, cmap_R)
+    axis equal
+
+% Create video writer with MPEG-4 format
+vidname = sprintf('DisVid_Diagnostic_thresh%d_scale%.1f_shape%.3f', ...
+                  export_thresh, flux_scale, flux_shape);
+v = VideoWriter(fullfile(seascapePath, vidname), 'MPEG-4');
+v.Quality = 95;  % 0-100, higher = better quality but larger file
+v.FrameRate = 5;
+open(v);
+
+% Threshold for disease front boundary
+%   - this is saying that only once 0.1% cover within a site (patch) has
+%       been removed, is that site considered "observable" to, for example,
+%       the naked eye of strike team divers in the water within that ~0.4
+%       m2 grid square
+removed_cover_thresh = 0.001; % in proportion 0 to 1 (not 0-100%)
+
+% Determine how many days actually simulated
+num_days = size(I_total_output_days, 1);
+fprintf('Creating animation for %d days of simulation\n', num_days);
+
+% Generate animation frames
+for k = 1:1:num_days
+    Dt = datetime(2019,1,1) + (tspan(1) + k - 2);  % Adjust for actual tspan start
+
+    % Find sites with dead coral above threshold (disease front)
+    observable_sick_sites = R_total_output_days(k,:) >= removed_cover_thresh;
+    if sum(observable_sick_sites) >= 3  % Need at least 3 points for boundary
+        locs_sick_sites = locations(observable_sick_sites,:);
+        try
+            bounds_sick_sites = boundary(locs_sick_sites(:,1), locs_sick_sites(:,2), 0.7);
+            draw_boundary = true;
+        catch
+            draw_boundary = false;  % Not enough points or other issue
+        end
+    else
+        draw_boundary = false;
+    end
+
+    % Update plot 1: Disease prevalence (absolute % cover of site which is infected)
+    set(h1, 'CData', I_total_output_days(k,:)');
+    if draw_boundary
+        p1 = patch(axv1, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
+                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
+    end
+    %
+    title(axv1, 'Infected cover of seafloor (%)', ...
+          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
+    colormap(axv1, cmap_I);
+    clim([0 .01]);
+    axis equal
+
+    % Update plot 2: Disease prevalence (relative % cover of site which is infected)
+    set(h2, 'CData', I_total_output_days(k,:)'./N_site(:));
+    if draw_boundary
+        p2 = patch(axv2, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
+                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
+    end
+    %
+    title(axv2, 'Relative cover of infected coral (%)', ...
+          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
+    colormap(axv2, cmap_I);
+    clim([0 .1]);
+    axis equal
+
+    % Update plot 3: Total coral cover lost
+    set(h3, 'CData', (N_site(:)-S_total_output_days(k,:)'));
+    if draw_boundary
+        p3 = patch(axv3, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
+                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
+    end
+    %
+    title(axv3, 'Removed cover of seafloor (%)', ...
+          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
+    clim([0 1]);
+    colormap(axv3, cmap_R)
+    axis equal
+
+    % Update plot 4: Proportion coral cover lost
+    set(h4, 'CData', (N_site(:)-S_total_output_days(k,:)')./N_site(:));
+    if draw_boundary
+        p4 = patch(axv4, locs_sick_sites(bounds_sick_sites,1), locs_sick_sites(bounds_sick_sites,2), [.8 .9 1], ...
+                   'EdgeColor', 'r', 'FaceAlpha', 0.2);
+    end
+    %
+    title(axv4, 'Relative cover of removed coral (%)', ...
+          sprintf('t = %s', string(Dt, 'dd-MMM-yyyy')));
+    clim([0 1]);
+    colormap(axv4, cmap_R)
+    axis equal
+
+    % Capture frame and write to video
+    F = getframe(f);
+    writeVideo(v, F);
+
+    % Clean up patches for next frame
+    if draw_boundary
+        delete(p1)
+        delete(p2)
+        delete(p3)
+        delete(p4)
+    end
+
+    % Progress indicator every 10 days
+    if mod(k, 10) == 0
+        fprintf('  Frame %d/%d\n', k, num_days);
+    end
+end
+
+close(v);
+fprintf('Animation saved as: %s.mp4\n', vidname);
 
 
 
