@@ -563,22 +563,20 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   - flux_scale = 1;
 %   - flux_shape = 0.001;
 %
-% WORKING SCENARIO 2
-% okay now getting very interesting. if you seed at more sites, doesn't
-% necessarily help a ton (though I've left it here). also, seeding in
-% December doesn't seem to make a huge dent but left here. what is
-% interesting, is leaving all sites in, and I also went in and tried
-% something to make sure removal was working correctly. and made sure
-% values can't go negative in 'opts'
-%   - include ALL sites; seed at 15+ sites around flat; [new removal method; use 'negative' in opts]
-seed_frac = 0.00001;
-export_thresh = 0.000025; %null condition
-I0 = 0.0000008; tau = I0 / 10;
-flux_scale = 1; % limits max, ranges 0:1. can be used for null condition, but is the default for shaping flux too. best to leave unchanged for now
-flux_shape = 0.001; %null condition
-%flam1
-
-
+% % WORKING SCENARIO 2
+% % okay now getting very interesting. if you seed at more sites, doesn't
+% % necessarily help a ton (though I've left it here). also, seeding in
+% % December doesn't seem to make a huge dent but left here. what is
+% % interesting, is leaving all sites in, and I also went in and tried
+% % something to make sure removal was working correctly. and made sure
+% % values can't go negative in 'opts'
+% %   - include ALL sites; seed at 15+ sites around flat; [newEST removal method; use 'negative' in opts]
+% seed_frac = 0.00001;
+% export_thresh = 0; %null condition
+% I0 = 0.00000079; tau = I0 / 10; % 0.00000079 is weirdly good ????? 822 and 83 too restrictive; 82 too allowant; 8201 and 82011 even further ?????? 80011 is okay...
+% flux_scale = 1; % limits max, ranges 0:1. can be used for null condition, but is the default for shaping flux too. best to leave unchanged for now
+% flux_shape = 0.001; %null condition
+% %flam1
 %
 % this is essentially just above but a stress test to show explosion to
 % more final state
@@ -599,14 +597,30 @@ flux_shape = 0.001; %null condition
 %   - flux_scale = 1;
 %   - flux_shape = 3;
 %
-% WORKING SCENARIO 1
-% pretty damn good
-%   - include ALL sites; seed at 15+ sites around flat; [new removal method; use 'negative' in opts]
-%   - seed_frac = 0.00001;
-%   - export_thresh = 0;
-%   - I0 = 0.0000010455; tau = I0 / 10
-%   - flux_scale = 1;
-%   - flux_shape = 1.5;
+% % WORKING SCENARIO 1
+% % pretty damn good
+% %   - include ALL sites; seed at 15+ sites around flat; [newEST removal method; use 'negative' in opts]
+% seed_frac = 0.00001;
+% export_thresh = 0;
+% I0 = 0.0000010455; tau = I0 / 10;
+% flux_scale = 1;
+% flux_shape = 1.5;
+%
+% % WORKING SCENARIO 3 - interesting????
+% %   - include ALL sites; seed at 15+ sites around flat; [newEST removal method; use 'negative' in opts]
+% seed_frac = 0.00001;
+% export_thresh = 0.00002;
+% I0 = 0.0000006; tau = I0 / 10;
+% flux_scale = 1;
+% flux_shape = -1;
+% %
+% WORKING SCENARIO 3
+%   - include ALL sites; seed at 15+ sites around flat; [newEST removal method; use 'negative' in opts]
+seed_frac = 0.000008;
+export_thresh = 0.000021; %0.00002 and I0 of 0.000000651 interesting
+I0 = 0.000000651; tau = I0 / 10;
+flux_scale = 1;
+flux_shape = -1;
 
 
 % define how to seed disease at Flat Cay (or wherever chosen starting
@@ -778,7 +792,6 @@ fprintf('========================================\n\n');
 
 clear Y t
 tic
-% [t,Y] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days), tspan, Y0, opts);
 [t,Y] = ode45(@(t,Y) ODEfun_SCTLD_seascape(t,Y,N_LS,N_MS,N_HS,b_LS,b_MS,b_HS,g_LS,g_MS,g_HS,export_thresh,flux_scale,flux_shape,num_sites,conn_structs,conn_days,I0,tau), tspan, Y0, opts);
 elapsed = toc;
 
