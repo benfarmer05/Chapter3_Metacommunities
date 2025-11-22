@@ -1,0 +1,51 @@
+&runconf
+!====================================================================!
+nnests               = 1
+timeMax              = 1209600         !in seconds- 15 days
+timestep             = 300            !in seconds - every 5 minutes
+outputFreq           = 900           !in seconds - every 15 minutes
+releaseFilename      = "ReleaseFile_USVI_2019_Q4.txt"
+!====================================================================!
+!Turbulence Module
+turb                 = .true.
+horDiff              = 0.4749636132   !horizontal diffusivity (m2/s2) (3.5km)
+vertDiff             = 0.004749636132       !vertical diffusivity (m2/s2)
+turbTimestep         = 300        !in seconds
+!====================================================================!
+!Periodic Boundary Condition
+periodicbc           = .false.
+!====================================================================!
+!Landmask Boundary Condition
+avoidcoast           = .true.
+!====================================================================!
+!Backward Tracking Module
+backward             = .false.
+!====================================================================!
+!Output files in ASCII instead of netCDF
+ascii                = .false.
+!====================================================================!
+!Flag to limit particle vertical movement to upper layer
+upperlevelsurface    = .true.
+!====================================================================!
+!Flag for looping through the velocity fields
+loopfiles            = .false.
+loopfilesstartyear   = 0
+loopfilesstartmonth  = 0
+loopfilesstartday    = 0
+loopfilesendyear     = 0
+loopfilesendmonth    = 0
+loopfilesendday      = 0
+!====================================================================!
+!Options for saving restart files and restarting
+writerestart         = .false.
+restartfromfile      = .false.
+restartwritefreq     = 0            !in seconds
+!====================================================================!
+!Options for mixed layer physics
+mixedlayerphysics    = .false.
+mixedlayerwmax       = 0
+!====================================================================!
+!Option to turn the trajectory output off (set .false.)
+trajout              = .true.
+!====================================================================!
+&end

@@ -582,28 +582,28 @@ N_site = reefData.mean_coral_cover; %same as N_LS + N_MS + N_HS
 %   - flux_scale = 1;
 %   - flux_shape = 3;
 %
-% % WORKING SCENARIO 1
-% % pretty damn good
-% %   - include ALL sites; seed at 15+ sites around flat; [newEST removal method; use 'negative' in opts]
-% seed_frac = 0.00001;
-% export_thresh = 0;
-% I0 = 0.0000010455; tau = I0 / 10;
-% flux_scale = 1;
-% flux_shape = 1.5;
-%
-% WORKING SCENARIO 2
-% okay now getting very interesting. if you seed at more sites, doesn't
-% necessarily help a ton (though I've left it here). also, seeding in
-% December doesn't seem to make a huge dent but left here. what is
-% interesting, is leaving all sites in, and I also went in and tried
-% something to make sure removal was working correctly. and made sure
-% values can't go negative in 'opts'
+% WORKING SCENARIO 1
+% pretty damn good
 %   - include ALL sites; seed at 15+ sites around flat; [newEST removal method; use 'negative' in opts]
 seed_frac = 0.00001;
-export_thresh = 0; %null condition
-I0 = 0.00000079; tau = I0 / 10; % 0.00000079 is weirdly good ????? 822 and 83 too restrictive; 82 too allowant; 8201 and 82011 even further ?????? 80011 is okay...
-flux_scale = 1; % limits max, ranges 0:1. can be used for null condition, but is the default for shaping flux too. best to leave unchanged for now
-flux_shape = 0.001; %null condition
+export_thresh = 0;
+I0 = 0.0000010455; tau = I0 / 10;
+flux_scale = 1;
+flux_shape = 1.5;
+%
+% % WORKING SCENARIO 2
+% % okay now getting very interesting. if you seed at more sites, doesn't
+% % necessarily help a ton (though I've left it here). also, seeding in
+% % December doesn't seem to make a huge dent but left here. what is
+% % interesting, is leaving all sites in, and I also went in and tried
+% % something to make sure removal was working correctly. and made sure
+% % values can't go negative in 'opts'
+% %   - include ALL sites; seed at 15+ sites around flat; [newEST removal method; use 'negative' in opts]
+% seed_frac = 0.00001;
+% export_thresh = 0; %null condition
+% I0 = 0.00000079; tau = I0 / 10; % 0.00000079 is weirdly good ????? 822 and 83 too restrictive; 82 too allowant; 8201 and 82011 even further ?????? 80011 is okay...
+% flux_scale = 1; % limits max, ranges 0:1. can be used for null condition, but is the default for shaping flux too. best to leave unchanged for now
+% flux_shape = 0.001; %null condition
 %
 % % WORKING SCENARIO 3
 % %   - include ALL sites; seed at 15+ sites around flat; [newEST removal method; use 'negative' in opts]

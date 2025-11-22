@@ -161,11 +161,11 @@ end
 
 fprintf('✓ ID validation passed! Proceeding with release file creation...\n\n');
 
-%% Create release file with 150 particles per polygon
+%% Create release file with 65 particles per polygon
 
 fprintf('========== CREATING RELEASE DATA ==========\n');
 
-% MODIFIED: 150 particles per polygon per release (matching Dobbelaere 2020 density)
+% MODIFIED: 65 particles per polygon per release (matching Dobbelaere 2020 density)
 num_particles = 65;
 
 fprintf('Particles per polygon per release: %d\n', num_particles);
@@ -188,7 +188,7 @@ latitudes_CMS = repmat(latitudes, num_releases, 1);
 % Use assigned depths for each release point
 depths_CMS = repmat(depths_assigned, num_releases, 1);
 
-% 150 particles per release event at each location
+% 65 particles per release event at each location
 particles_CMS = repmat(num_particles, numpoints * num_releases, 1);
 
 % Pre-allocate temporal arrays
