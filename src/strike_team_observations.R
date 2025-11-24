@@ -13,6 +13,9 @@
 
   ################################## Set-up ##################################
   
+  # NOTE - we need to preserve multiple presence observations!!!
+  
+  
   #a very rich dataset of both SCTLD presence and absences. the primary driver behind observations.
   #   - provided by Courtney Tierney in April 2025
   rover = read.csv(here("data/SCTLDRoverSurveyFULLspecies_0.csv"))
@@ -54,17 +57,25 @@
     dplyr::select(-MMEA.Prevalence, -DCYL.Prevalence, -DSTO.Prevalence, -EFAS.Prevalence, 
                   -CNAT.Prevalence, -DLAB.Prevalence, -PSTR.Prevalence, -PCLI.Prevalence)
   
+  # # version dropping presences after first presence
+  # rover <- rover %>%
+  #   filter(presence != "") %>%  # Drop empty presence values
+  #   filter(Survey.ID != 1334) %>% #drop random Sint Maarten observation of absence
+  #   mutate(presence = as.factor(presence))
+  # rover_absences <- rover %>% filter(presence == "A")
+  # rover_presences <- rover %>%
+  #   filter(presence == "P" | presence == "S") %>%
+  #   arrange(date) %>%
+  #   distinct(lat, lon, .keep_all = TRUE)
+  # rover <- bind_rows(rover_absences, rover_presences) %>%
+  #   arrange(date)
+  
   rover <- rover %>%
     filter(presence != "") %>%  # Drop empty presence values
     filter(Survey.ID != 1334) %>% #drop random Sint Maarten observation of absence
-    mutate(presence = as.factor(presence))
-  rover_absences <- rover %>% filter(presence == "A")
-  rover_presences <- rover %>% 
-    filter(presence == "P" | presence == "S") %>%
+    mutate(presence = as.factor(presence)) %>%
     arrange(date) %>%
-    distinct(lat, lon, .keep_all = TRUE)
-  rover <- bind_rows(rover_absences, rover_presences) %>%
-    arrange(date)
+    distinct(date, lat, lon, .keep_all = TRUE)  # Remove exact duplicates only
   
   emerge = emerge %>%
     rename(location = Location, lat = Latitude, lon = Longitude, 
@@ -153,16 +164,25 @@
   combined <- bind_rows(rover_combined, emerge_combined, interv_combined) %>%
     arrange(date)
   
-  # Remove duplicate presences, keeping only first occurrence at each location
-  combined_absences <- combined %>% filter(presence == "A")
   
-  combined_presences <- combined %>% 
-    filter(presence == "P" | presence == "S") %>%
+  
+  
+  # # version where presences after first presence were removed
+  # # Remove duplicate presences, keeping only first occurrence at each location
+  # combined_absences <- combined %>% filter(presence == "A")
+  # 
+  # combined_presences <- combined %>% 
+  #   filter(presence == "P" | presence == "S") %>%
+  #   arrange(date) %>%
+  #   distinct(lat, lon, .keep_all = TRUE)
+  # 
+  # combined <- bind_rows(combined_absences, combined_presences) %>%
+  #   arrange(date)
+  
+  # Remove exact duplicates only (same date, lat, lon)
+  combined <- combined %>%
     arrange(date) %>%
-    distinct(lat, lon, .keep_all = TRUE)
-  
-  combined <- bind_rows(combined_absences, combined_presences) %>%
-    arrange(date)
+    distinct(date, lat, lon, .keep_all = TRUE)
   
   # Find the first presence date at each location
   first_presence <- combined %>%
