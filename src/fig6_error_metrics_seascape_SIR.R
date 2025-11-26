@@ -1,6 +1,5 @@
   
   # .rs.restartR(clean = TRUE)
-  
   rm(list=ls())
   
   library(here)
@@ -11,11 +10,10 @@
   library(leaflet)
   library(patchwork)
   
-  
   # NOTE - 20 Nov 2025
   #   something to fix still:
   #     - some wonky nearest distances going up to northern reefs! not right
-
+  
   ################################## Settings ##################################
   
   use_cached_distances <- TRUE
@@ -24,14 +22,35 @@
   
   # Scoring parameters
   model_res = 650
-  lambda_P <- model_res*2  # 1300m - presences should be close
-  lambda_A <- model_res*6  # 1950m - absences should be far
-  w1 <- 0.7
-  w2 <- 0.3
+  # lambda_P <- model_res
+  # lambda_A <- model_res
+  lambda_P <- model_res*2  # increasing this makes metric more forgiving
+  lambda_A <- model_res    # reducing this makes metric more forgiving, but can't really go lower than model res
+  w1 <- 0.5
+  w2 <- 0.5
   
   # Binary thresholds for Score 2
-  binary_threshold_P <- lambda_P  # Presence within this = match
-  binary_threshold_A <- lambda_A  # Absence beyond this = match
+  binary_threshold_P <- lambda_P
+  binary_threshold_A <- lambda_A
+  
+  # Plot styling parameters
+  titlesize <- 10
+  textsize <- 9
+  linewidth <- 0.75
+  legend_textsize <- 8
+  
+  # Figure dimensions (in inches)
+  fig_width <- 6
+  fig_height <- 4
+  # fig_width <- 4
+  # fig_height <- 2.66
+  
+  # Scenario colors (colorblind-friendly palette)
+  scenario_colors <- c(
+    "Scenario 1" = "#E69F00",
+    "Scenario 2" = "#0072B2",
+    "Scenario 3" = "#009E73"
+  )
   
   # Auto-detect scenario folders
   seascape_dir <- here("output", "seascape_SIR")
@@ -87,6 +106,30 @@
   obs <- obs[within_extent, ]
   
   cat("  Retained", nrow(obs_sf), "observations\n\n")
+  
+  ################################## Drop Problem Observations ##################################
+  # These points have erroneous water-distance calculations due to boundary effects
+  # Identified via diagnostic leaflet on 25 Nov 2025
+  
+  problem_coords <- data.frame(
+    lon = c(-65.01480, -64.86563, -64.78265),
+    lat = c(18.34520, 18.34944, 18.34696)
+  )
+  
+  obs_coords_current <- st_coordinates(st_transform(obs_sf, 4326))
+  to_drop <- sapply(1:nrow(problem_coords), function(i) {
+    which(abs(obs_coords_current[,1] - problem_coords$lon[i]) < 0.0001 & 
+            abs(obs_coords_current[,2] - problem_coords$lat[i]) < 0.0001)
+  })
+  to_drop <- unlist(to_drop)
+  
+  if (length(to_drop) > 0) {
+    cat("  Dropping", length(to_drop), "problem observations (boundary effects)\n")
+    obs_sf <- obs_sf[-to_drop, ]
+    obs <- obs[-to_drop, ]
+  }
+  
+  cat("  Observations after cleanup:", nrow(obs_sf), "\n\n")
   
   ################################## Process All Scenarios ##################################
   
@@ -257,14 +300,18 @@
       
       diseased_coords_wgs84 <- st_coordinates(diseased_wgs84)
       
+      # Calculate Score 2 component scores (as proportions)
+      n_P <- sum(nearest_data$presence %in% c("P", "S"))
+      n_A <- sum(nearest_data$presence == "A")
+      
       list(
         summary = data.frame(
           month = month_date,
           mean_distance_m = mean(nearest_data$distance_m, na.rm = TRUE),
           n_obs = nrow(obs_month),
           n_diseased_sites = nrow(diseased_sites),
-          n_presence = sum(obs_month$presence %in% c("P", "S")),
-          n_absence = sum(obs_month$presence == "A"),
+          n_presence = n_P,
+          n_absence = n_A,
           mean_dist_presence = mean(nearest_data$distance_m[nearest_data$presence %in% c("P", "S")], na.rm = TRUE),
           mean_dist_absence = mean(nearest_data$distance_m[nearest_data$presence == "A"], na.rm = TRUE),
           # Score 1: Continuous distance-based
@@ -275,19 +322,16 @@
           # Score 2: Binary threshold-based
           n_presence_match = sum(nearest_data$distance_m[nearest_data$presence %in% c("P", "S")] <= binary_threshold_P, na.rm = TRUE),
           n_absence_match = sum(nearest_data$distance_m[nearest_data$presence == "A"] >= binary_threshold_A, na.rm = TRUE),
-          alpha = sum(nearest_data$presence %in% c("P", "S")) / sum(nearest_data$presence == "A"),
+          # Score 2 component scores (proportion correct)
+          score2_P = sum(nearest_data$distance_m[nearest_data$presence %in% c("P", "S")] <= binary_threshold_P, na.rm = TRUE) / n_P,
+          score2_A = sum(nearest_data$distance_m[nearest_data$presence == "A"] >= binary_threshold_A, na.rm = TRUE) / n_A,
+          alpha = n_P / n_A,
           score2_raw = sum(nearest_data$distance_m[nearest_data$presence %in% c("P", "S")] <= binary_threshold_P, na.rm = TRUE) +
-            (sum(nearest_data$presence %in% c("P", "S")) / sum(nearest_data$presence == "A")) * 
-            sum(nearest_data$distance_m[nearest_data$presence == "A"] >= binary_threshold_A, na.rm = TRUE),
-          score2_max = sum(nearest_data$presence %in% c("P", "S")) + 
-            (sum(nearest_data$presence %in% c("P", "S")) / sum(nearest_data$presence == "A")) * 
-            sum(nearest_data$presence == "A"),
+            (n_P / n_A) * sum(nearest_data$distance_m[nearest_data$presence == "A"] >= binary_threshold_A, na.rm = TRUE),
+          score2_max = n_P + (n_P / n_A) * n_A,
           score2_norm = (sum(nearest_data$distance_m[nearest_data$presence %in% c("P", "S")] <= binary_threshold_P, na.rm = TRUE) +
-                           (sum(nearest_data$presence %in% c("P", "S")) / sum(nearest_data$presence == "A")) * 
-                           sum(nearest_data$distance_m[nearest_data$presence == "A"] >= binary_threshold_A, na.rm = TRUE)) /
-            (sum(nearest_data$presence %in% c("P", "S")) + 
-               (sum(nearest_data$presence %in% c("P", "S")) / sum(nearest_data$presence == "A")) * 
-               sum(nearest_data$presence == "A"))
+                           (n_P / n_A) * sum(nearest_data$distance_m[nearest_data$presence == "A"] >= binary_threshold_A, na.rm = TRUE)) /
+            (n_P + (n_P / n_A) * n_A)
         ),
         map_data = map_data,
         diseased_sites = data.frame(
@@ -320,7 +364,7 @@
                  names_to = "type", values_to = "distance") %>%
     mutate(type = ifelse(type == "mean_dist_presence", "Presence", "Absence")) %>%
     ggplot(aes(x = month, y = distance, color = type, linetype = scenario, group = interaction(type, scenario))) +
-    geom_line(linewidth = 1) +
+    geom_line(linewidth = linewidth) +
     geom_point(alpha = 0.5, size = 2) +
     scale_color_manual(values = c("Presence" = "coral", "Absence" = "steelblue"),
                        name = "Observation Type") +
@@ -336,9 +380,9 @@
   
   print(distance_plot_split)
   
-  # Score plots
+  # Score 1 plots (continuous)
   score_P_plot <- ggplot(combined_summary, aes(x = month, y = score_P, color = scenario, linetype = scenario)) +
-    geom_line(linewidth = 1) +
+    geom_line(linewidth = linewidth) +
     geom_point(alpha = 0.5, size = 2) +
     scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
     scale_y_continuous(limits = c(0, 1)) +
@@ -350,7 +394,7 @@
           plot.title = element_text(face = "bold"))
   
   score_A_plot <- ggplot(combined_summary, aes(x = month, y = score_A, color = scenario, linetype = scenario)) +
-    geom_line(linewidth = 1) +
+    geom_line(linewidth = linewidth) +
     geom_point(alpha = 0.5, size = 2) +
     scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
     scale_y_continuous(limits = c(0, 1)) +
@@ -369,7 +413,7 @@
   
   # Combined score 1
   combined_score_plot <- ggplot(combined_summary, aes(x = month, y = score_combined, color = scenario, linetype = scenario)) +
-    geom_line(linewidth = 1) +
+    geom_line(linewidth = linewidth) +
     geom_point(alpha = 0.5, size = 2) +
     scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
     scale_y_continuous(limits = c(0, 1)) +
@@ -382,9 +426,9 @@
   
   print(combined_score_plot)
   
-  # Score 2: Binary threshold-based
+  # Score 2: Binary threshold-based (combined)
   score2_plot <- ggplot(combined_summary, aes(x = month, y = score2_norm, color = scenario, linetype = scenario)) +
-    geom_line(linewidth = 1) +
+    geom_line(linewidth = linewidth) +
     geom_point(alpha = 0.5, size = 2) +
     scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
     scale_y_continuous(limits = c(0, 1)) +
@@ -396,6 +440,172 @@
           plot.title = element_text(face = "bold"))
   
   print(score2_plot)
+  
+  # Score 2: Split by presence/absence + combined (Georgia font styling)
+  
+  # Create scenario labels for plotting
+  combined_summary <- combined_summary %>%
+    mutate(scenario_label = case_when(
+      grepl("SCENARIO1", scenario) ~ "Scenario 1",
+      grepl("SCENARIO2", scenario) ~ "Scenario 2",
+      grepl("SCENARIO3", scenario) ~ "Scenario 3",
+      TRUE ~ scenario
+    ))
+  
+  score2_P_plot <- ggplot(combined_summary, aes(x = month, y = score2_P, color = scenario_label, linetype = scenario_label)) +
+    geom_line(linewidth = linewidth, alpha = 0.7) +
+    geom_point(size = 1.5, alpha = 0.7) +
+    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+    scale_x_date(date_labels = "%b-%Y") +
+    scale_color_manual(values = scenario_colors) +
+    scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
+    labs(x = NULL, y = "Sensitivity") +
+    annotate("text", x = Inf, y = Inf, label = "A", hjust = 1.5, vjust = 1.5,
+             size = titlesize / .pt, family = "Georgia") +
+    theme_classic(base_family = "Georgia") +
+    theme(
+      axis.title.y = element_text(size = titlesize, color = 'black', margin = margin(r = 10)),
+      axis.text = element_text(size = textsize, color = 'black'),
+      axis.text.x = element_text(angle = 0, hjust = 0.5),
+      axis.ticks = element_line(color = "black"),
+      legend.position = "none",
+      plot.margin = margin(t = 5, r = 10, b = 0, l = 5)
+    )
+  
+  score2_A_plot <- ggplot(combined_summary, aes(x = month, y = score2_A, color = scenario_label, linetype = scenario_label)) +
+    geom_line(linewidth = linewidth, alpha = 0.7) +
+    geom_point(size = 1.5, alpha = 0.7) +
+    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+    scale_x_date(date_labels = "%b-%Y") +
+    scale_color_manual(values = scenario_colors) +
+    scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
+    labs(x = NULL, y = "Specificity") +
+    annotate("text", x = Inf, y = Inf, label = "B", hjust = 1.5, vjust = 1.5,
+             size = titlesize / .pt, family = "Georgia") +
+    theme_classic(base_family = "Georgia") +
+    theme(
+      axis.title.y = element_text(size = titlesize, color = 'black', margin = margin(r = 10)),
+      axis.text = element_text(size = textsize, color = 'black'),
+      axis.text.x = element_text(angle = 0, hjust = 0.5),
+      axis.ticks = element_line(color = "black"),
+      legend.position = "none",
+      plot.margin = margin(t = 5, r = 10, b = 0, l = 5)
+    )
+  
+  score2_combined_plot <- ggplot(combined_summary, aes(x = month, y = score2_norm, color = scenario_label, linetype = scenario_label)) +
+    geom_line(linewidth = linewidth, alpha = 0.7) +
+    geom_point(size = 1.5, alpha = 0.7) +
+    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+    scale_x_date(date_labels = "%b-%Y") +
+    scale_color_manual(values = scenario_colors, name = NULL) +
+    scale_linetype_manual(values = c("solid", "dashed", "dotted"), name = NULL) +
+    labs(x = NULL, y = "Weighted accuracy") +
+    annotate("text", x = Inf, y = Inf, label = "C", hjust = 1.5, vjust = 1.5,
+             size = titlesize / .pt, family = "Georgia") +
+    theme_classic(base_family = "Georgia") +
+    theme(
+      axis.title.y = element_text(size = titlesize, color = 'black', margin = margin(r = 10)),
+      axis.text = element_text(size = textsize, color = 'black'),
+      axis.text.x = element_text(angle = 0, hjust = 0.5),
+      axis.ticks = element_line(color = "black"),
+      legend.position = "bottom",
+      legend.text = element_text(size = legend_textsize),
+      legend.key.width = unit(1.5, "cm"),
+      plot.margin = margin(t = 5, r = 10, b = 5, l = 5)
+    )
+  
+  score2_split_plot <- (score2_P_plot / score2_A_plot / score2_combined_plot) +
+    plot_layout(heights = c(1, 1, 1))
+  
+  print(score2_split_plot)
+  
+  # Save Score 2 split plot
+  ggsave(
+    filename = here("output", "output_figures_tables", "score2_split_plot.png"),
+    plot = score2_split_plot,
+    width = fig_width,
+    height = fig_height,
+    dpi = 300,
+    bg = "white"
+  )
+  
+  # Score 1: Split by presence/absence + combined (Georgia font styling)
+  score1_P_plot <- ggplot(combined_summary, aes(x = month, y = score_P, color = scenario_label, linetype = scenario_label)) +
+    geom_line(linewidth = linewidth, alpha = 0.7) +
+    geom_point(size = 1.5, alpha = 0.7) +
+    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+    scale_x_date(date_labels = "%b-%Y") +
+    scale_color_manual(values = scenario_colors) +
+    scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
+    labs(x = NULL, y = "Presence score") +
+    annotate("text", x = Inf, y = Inf, label = "A", hjust = 1.5, vjust = 1.5,
+             size = titlesize / .pt, family = "Georgia") +
+    theme_classic(base_family = "Georgia") +
+    theme(
+      axis.title.y = element_text(size = titlesize, color = 'black', margin = margin(r = 10)),
+      axis.text = element_text(size = textsize, color = 'black'),
+      axis.text.x = element_text(angle = 0, hjust = 0.5),
+      axis.ticks = element_line(color = "black"),
+      legend.position = "none",
+      plot.margin = margin(t = 5, r = 10, b = 0, l = 5)
+    )
+  
+  score1_A_plot <- ggplot(combined_summary, aes(x = month, y = score_A, color = scenario_label, linetype = scenario_label)) +
+    geom_line(linewidth = linewidth, alpha = 0.7) +
+    geom_point(size = 1.5, alpha = 0.7) +
+    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+    scale_x_date(date_labels = "%b-%Y") +
+    scale_color_manual(values = scenario_colors) +
+    scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
+    labs(x = NULL, y = "Absence score") +
+    annotate("text", x = Inf, y = Inf, label = "B", hjust = 1.5, vjust = 1.5,
+             size = titlesize / .pt, family = "Georgia") +
+    theme_classic(base_family = "Georgia") +
+    theme(
+      axis.title.y = element_text(size = titlesize, color = 'black', margin = margin(r = 10)),
+      axis.text = element_text(size = textsize, color = 'black'),
+      axis.text.x = element_text(angle = 0, hjust = 0.5),
+      axis.ticks = element_line(color = "black"),
+      legend.position = "none",
+      plot.margin = margin(t = 5, r = 10, b = 0, l = 5)
+    )
+  
+  score1_combined_plot <- ggplot(combined_summary, aes(x = month, y = score_combined, color = scenario_label, linetype = scenario_label)) +
+    geom_line(linewidth = linewidth, alpha = 0.7) +
+    geom_point(size = 1.5, alpha = 0.7) +
+    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+    scale_x_date(date_labels = "%b-%Y") +
+    scale_color_manual(values = scenario_colors, name = NULL) +
+    scale_linetype_manual(values = c("solid", "dashed", "dotted"), name = NULL) +
+    labs(x = NULL, y = "Weighted score") +
+    annotate("text", x = Inf, y = Inf, label = "C", hjust = 1.5, vjust = 1.5,
+             size = titlesize / .pt, family = "Georgia") +
+    theme_classic(base_family = "Georgia") +
+    theme(
+      axis.title.y = element_text(size = titlesize, color = 'black', margin = margin(r = 10)),
+      axis.text = element_text(size = textsize, color = 'black'),
+      axis.text.x = element_text(angle = 0, hjust = 0.5),
+      axis.ticks = element_line(color = "black"),
+      legend.position = "bottom",
+      legend.text = element_text(size = legend_textsize),
+      legend.key.width = unit(1.5, "cm"),
+      plot.margin = margin(t = 5, r = 10, b = 5, l = 5)
+    )
+  
+  score1_split_plot <- (score1_P_plot / score1_A_plot / score1_combined_plot) +
+    plot_layout(heights = c(1, 1, 1))
+  
+  print(score1_split_plot)
+  
+  # Save Score 1 split plot
+  ggsave(
+    filename = here("output", "output_figures_tables", "score1_split_plot.png"),
+    plot = score1_split_plot,
+    width = fig_width,
+    height = fig_height,
+    dpi = 300,
+    bg = "white"
+  )
   
   ################################## Leaflet Maps (One per Scenario) ##################################
   
@@ -422,12 +632,8 @@
         addCircleMarkers(
           data = month_diseased,
           lng = ~lon, lat = ~lat,
-          radius = 3,
-          color = "gray",
-          fillColor = "gray",
-          fillOpacity = 0.4,
-          stroke = TRUE,
-          weight = 1,
+          radius = 3, color = "gray", fillColor = "gray",
+          fillOpacity = 0.4, stroke = TRUE, weight = 1,
           group = month_label,
           popup = ~paste0("<b>Diseased Model Site</b><br><b>Month:</b> ", month_label)
         )
@@ -437,12 +643,8 @@
           addCircleMarkers(
             data = month_presence,
             lng = ~obs_lon, lat = ~obs_lat,
-            radius = 7,
-            color = "darkorange",
-            fillColor = "coral",
-            fillOpacity = 0.9,
-            stroke = TRUE,
-            weight = 2,
+            radius = 7, color = "darkorange", fillColor = "coral",
+            fillOpacity = 0.9, stroke = TRUE, weight = 2,
             group = month_label,
             popup = ~paste0("<b>Presence Observation</b><br>",
                             "<b>Month:</b> ", month_label, "<br>",
@@ -454,10 +656,7 @@
             addPolylines(
               lng = c(month_presence$obs_lon[i], month_presence$nearest_lon[i]),
               lat = c(month_presence$obs_lat[i], month_presence$nearest_lat[i]),
-              color = "orange",
-              weight = 2,
-              opacity = 0.7,
-              group = month_label
+              color = "orange", weight = 2, opacity = 0.7, group = month_label
             )
         }
       }
@@ -467,12 +666,8 @@
           addCircleMarkers(
             data = month_absence,
             lng = ~obs_lon, lat = ~obs_lat,
-            radius = 7,
-            color = "darkblue",
-            fillColor = "lightblue",
-            fillOpacity = 0.9,
-            stroke = TRUE,
-            weight = 2,
+            radius = 7, color = "darkblue", fillColor = "lightblue",
+            fillOpacity = 0.9, stroke = TRUE, weight = 2,
             group = month_label,
             popup = ~paste0("<b>Absence Observation</b><br>",
                             "<b>Month:</b> ", month_label, "<br>",
@@ -484,10 +679,7 @@
             addPolylines(
               lng = c(month_absence$obs_lon[i], month_absence$nearest_lon[i]),
               lat = c(month_absence$obs_lat[i], month_absence$nearest_lat[i]),
-              color = "blue",
-              weight = 2,
-              opacity = 0.7,
-              group = month_label
+              color = "blue", weight = 2, opacity = 0.7, group = month_label
             )
         }
       }
