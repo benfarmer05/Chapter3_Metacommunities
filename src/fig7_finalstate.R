@@ -23,7 +23,7 @@
   legend_barheight <- 0.5
   
   # Figure dimensions
-  fig_width <- 6
+  fig_width <- 5.5
   fig_height <- 3
   
   # Color palettes (viridis options: viridis, magma, plasma, inferno, cividis, mako, rocket, turbo)
