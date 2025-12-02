@@ -605,13 +605,13 @@ flux_shape = 1.5;
 % flux_scale = 1; % limits max, ranges 0:1. can be used for null condition, but is the default for shaping flux too. best to leave unchanged for now
 % flux_shape = 0.001; %null condition
 %
-% % WORKING SCENARIO 3
-% %   - include ALL sites; seed at 15+ sites around flat; [newEST removal method; use 'negative' in opts]
-% seed_frac = 0.000008;
-% export_thresh = 0.00002012;
-% I0 = 0.000000652; tau = I0 / 10;
-% flux_scale = 1;
-% flux_shape = -1;
+% WORKING SCENARIO 3
+%   - include ALL sites; seed at 15+ sites around flat; [newEST removal method; use 'negative' in opts]
+seed_frac = 0.000008;
+export_thresh = 0.00002012;
+I0 = 0.000000652; tau = I0 / 10;
+flux_scale = 1;
+flux_shape = -1;
 
 %flam1
 

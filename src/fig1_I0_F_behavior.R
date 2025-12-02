@@ -89,7 +89,7 @@
     scale_color_manual(values = scenario_colors) +
     
     labs(
-      x = "Relative infected coral cover (%)",
+      x = "Fraction of coral cover infected",
       y = expression(paste(italic(ψ), " step function"))
     ) +
     

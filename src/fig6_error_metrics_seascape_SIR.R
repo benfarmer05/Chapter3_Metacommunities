@@ -10,10 +10,6 @@
   library(leaflet)
   library(patchwork)
   
-  # NOTE - 20 Nov 2025
-  #   something to fix still:
-  #     - some wonky nearest distances going up to northern reefs! not right
-  
   ################################## Settings ##################################
   
   use_cached_distances <- TRUE

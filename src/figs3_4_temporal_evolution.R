@@ -13,7 +13,7 @@
   
   ################################## Settings ##################################
   
-  use_existing_cache <- TRUE  # Set to TRUE to load cached data, FALSE to regenerate
+  use_existing_cache <- FALSE  # Set to TRUE to load cached data, FALSE to regenerate
   use_group_denominator <- FALSE  # TRUE = divide by group total, FALSE = divide by site total
   
   # Plot styling parameters
@@ -591,3 +591,31 @@
   )
   
   cat("\n✓ All figures complete and saved to:", output_dir, "\n")
+  
+  
+  ################################## quick summary for manuscript, of #/infected sites by scenario ##################################
+  
+  # --- Total infected sites at the end of each scenario ---
+  
+  get_final_infected_sites <- function(scenario_list) {
+    
+    results <- map_df(seq_along(scenario_list), function(i) {
+      scen_name <- names(scenario_list)[i]
+      I_mat <- scenario_list[[i]]$I_total   # matrix: time × sites
+      
+      final_infected <- I_mat[nrow(I_mat), ]        # last time step
+      infected_sites <- sum(final_infected > 0)     # count sites with infection
+      
+      tibble(
+        scenario = scen_name,
+        infected_sites_end = infected_sites
+      )
+    })
+    
+    return(results)
+  }
+  
+  # Run it
+  final_infected_summary <- get_final_infected_sites(scenario_data)
+  print(final_infected_summary)
+  

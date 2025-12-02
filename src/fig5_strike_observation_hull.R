@@ -196,5 +196,5 @@
   
   print(combined)
   
-  ggsave(here("output", "output_figures_tables", "quarterly_disease_presence.png"), 
-         combined, width = FIG_WIDTH, height = FIG_HEIGHT, dpi = FIG_DPI, bg = "white")
+  # ggsave(here("output", "output_figures_tables", "quarterly_disease_presence.png"), 
+  #        combined, width = FIG_WIDTH, height = FIG_HEIGHT, dpi = FIG_DPI, bg = "white")
