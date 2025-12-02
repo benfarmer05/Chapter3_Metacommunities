@@ -198,3 +198,16 @@
   
   # ggsave(here("output", "output_figures_tables", "quarterly_disease_presence.png"), 
   #        combined, width = FIG_WIDTH, height = FIG_HEIGHT, dpi = FIG_DPI, bg = "white")
+  
+  
+  ################################## quick summary for manuscript, of #/observations by quarter ##################################
+  
+  # Summary of observations by quarter and type
+  obs %>%
+    count(quarter, obs_type) %>%
+    pivot_wider(names_from = obs_type, values_from = n, values_fill = 0) %>%
+    mutate(Total = Presence + Absence) %>%
+    arrange(quarter)
+  
+  
+  
