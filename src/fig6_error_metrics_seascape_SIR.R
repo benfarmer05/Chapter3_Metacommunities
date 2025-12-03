@@ -699,3 +699,25 @@
   }
   
   cat("\n✓ Script complete!\n")
+  
+  
+  ################################## quick summary for manuscripts, of mean/min/max scores ##################################
+  
+  # Summary statistics for Score 1 metrics by scenario
+  combined_summary %>%
+    group_by(scenario_label) %>%
+    summarise(
+      # Presence score (Score 1)
+      score_P_mean = mean(score_P, na.rm = TRUE),
+      score_P_min = min(score_P, na.rm = TRUE),
+      score_P_max = max(score_P, na.rm = TRUE),
+      # Absence score (Score 1)
+      score_A_mean = mean(score_A, na.rm = TRUE),
+      score_A_min = min(score_A, na.rm = TRUE),
+      score_A_max = max(score_A, na.rm = TRUE),
+      # Combined score (Score 1)
+      score_combined_mean = mean(score_combined, na.rm = TRUE),
+      score_combined_min = min(score_combined, na.rm = TRUE),
+      score_combined_max = max(score_combined, na.rm = TRUE)
+    ) %>%
+    print(width = Inf)

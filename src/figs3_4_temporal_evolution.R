@@ -13,7 +13,7 @@
   
   ################################## Settings ##################################
   
-  use_existing_cache <- FALSE  # Set to TRUE to load cached data, FALSE to regenerate
+  use_existing_cache <- TRUE  # Set to TRUE to load cached data, FALSE to regenerate
   use_group_denominator <- FALSE  # TRUE = divide by group total, FALSE = divide by site total
   
   # Plot styling parameters
@@ -598,24 +598,54 @@
   # --- Total infected sites at the end of each scenario ---
   
   get_final_infected_sites <- function(scenario_list) {
-    
+
     results <- map_df(seq_along(scenario_list), function(i) {
       scen_name <- names(scenario_list)[i]
       I_mat <- scenario_list[[i]]$I_total   # matrix: time × sites
-      
+
       final_infected <- I_mat[nrow(I_mat), ]        # last time step
       infected_sites <- sum(final_infected > 0)     # count sites with infection
-      
+
       tibble(
         scenario = scen_name,
         infected_sites_end = infected_sites
       )
     })
-    
+
     return(results)
   }
+
+
   
-  # Run it
-  final_infected_summary <- get_final_infected_sites(scenario_data)
-  print(final_infected_summary)
   
+  #summary of removal about 0.001% threshold, ANY removal, and when saturated removal was reached
+  site_summary <- map_df(scenarios, function(scenario) {
+    matlab_file <- here("output", "seascape_SIR", scenario, "seascape_SIR_workspace.mat")
+    R_total <- h5read(matlab_file, "/outputs/totals/R_total")
+    
+    ref_date <- as.Date("2018-12-01")
+    tspan <- as.vector(h5read(matlab_file, "/outputs/metadata/tspan"))
+    sim_dates <- ref_date + (tspan[1]:tspan[2]) - 1
+    
+    total_sites <- ncol(R_total)
+    sites_with_any_R <- apply(R_total, 1, function(x) sum(x > 0))
+    
+    max_sites <- max(sites_with_any_R)
+    first_max_idx <- which(sites_with_any_R == max_sites)[1]
+    
+    threshold_90 <- 0.9 * total_sites
+    first_90_idx <- which(sites_with_any_R >= threshold_90)[1]
+    
+    final_R <- R_total[nrow(R_total), ]
+    
+    tibble(
+      scenario = as.numeric(str_extract(scenario, "\\d+")),
+      total_sites = total_sites,
+      any_removal = sum(final_R > 0),
+      removal_above_threshold = sum(final_R > 0.00001),
+      date_90pct_reached = if_else(is.na(first_90_idx), as.Date(NA), sim_dates[first_90_idx]),
+      date_max_reached = sim_dates[first_max_idx]
+    )
+  })
+  
+  print(site_summary)
