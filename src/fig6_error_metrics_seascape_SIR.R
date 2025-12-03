@@ -452,7 +452,7 @@
     geom_line(linewidth = linewidth, alpha = 0.7) +
     geom_point(size = 1.5, alpha = 0.7) +
     scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
-    scale_x_date(date_labels = "%b-%Y") +
+    scale_x_date(date_labels = "%b", date_breaks = "1 month", limits = as.Date(c("2019-01-01", NA))) +
     scale_color_manual(values = scenario_colors) +
     scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
     labs(x = NULL, y = "Sensitivity") +
@@ -472,7 +472,7 @@
     geom_line(linewidth = linewidth, alpha = 0.7) +
     geom_point(size = 1.5, alpha = 0.7) +
     scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
-    scale_x_date(date_labels = "%b-%Y") +
+    scale_x_date(date_labels = "%b", date_breaks = "1 month", limits = as.Date(c("2019-01-01", NA))) +
     scale_color_manual(values = scenario_colors) +
     scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
     labs(x = NULL, y = "Specificity") +
@@ -492,7 +492,7 @@
     geom_line(linewidth = linewidth, alpha = 0.7) +
     geom_point(size = 1.5, alpha = 0.7) +
     scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
-    scale_x_date(date_labels = "%b-%Y") +
+    scale_x_date(date_labels = "%b", date_breaks = "1 month", limits = as.Date(c("2019-01-01", NA))) +
     scale_color_manual(values = scenario_colors, name = NULL) +
     scale_linetype_manual(values = c("solid", "dashed", "dotted"), name = NULL) +
     labs(x = NULL, y = "Weighted accuracy") +
@@ -530,7 +530,7 @@
     geom_line(linewidth = linewidth, alpha = 0.7) +
     geom_point(size = 1.5, alpha = 0.7) +
     scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
-    scale_x_date(date_labels = "%b-%Y") +
+    scale_x_date(date_labels = "%b", date_breaks = "1 month", limits = as.Date(c("2019-01-01", NA))) +
     scale_color_manual(values = scenario_colors) +
     scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
     labs(x = NULL, y = "Presence score") +
@@ -550,7 +550,7 @@
     geom_line(linewidth = linewidth, alpha = 0.7) +
     geom_point(size = 1.5, alpha = 0.7) +
     scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
-    scale_x_date(date_labels = "%b-%Y") +
+    scale_x_date(date_labels = "%b", date_breaks = "1 month", limits = as.Date(c("2019-01-01", NA))) +
     scale_color_manual(values = scenario_colors) +
     scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
     labs(x = NULL, y = "Absence score") +
@@ -570,7 +570,7 @@
     geom_line(linewidth = linewidth, alpha = 0.7) +
     geom_point(size = 1.5, alpha = 0.7) +
     scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
-    scale_x_date(date_labels = "%b-%Y") +
+    scale_x_date(date_labels = "%b", date_breaks = "1 month", limits = as.Date(c("2019-01-01", NA))) +
     scale_color_manual(values = scenario_colors, name = NULL) +
     scale_linetype_manual(values = c("solid", "dashed", "dotted"), name = NULL) +
     labs(x = NULL, y = "Weighted score") +
