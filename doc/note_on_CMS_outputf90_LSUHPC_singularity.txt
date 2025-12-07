@@ -1,0 +1,15 @@
+# the below is a draft note from ~May 2025 where I was considering if we needed to deal with a CMS fortran issue regarding ASCII outputted decimal lengths for particle tracking. Don't think this ended up mattering at all, and we chose to output to netcdf in the end.
+
+
+
+I am following up on correspondence from Fall 2024 between [LONI] and those in the lab of my PI, [], regarding the set-up of a singularity for the Connectivity Modeling System (CMS). While this will be my first time running the CMS on the HPC using the singularity [LONI] made, I see that the image still exists in /project.
+
+ 
+
+I have a question before I wade into running simulations next week. There is a specific Fortran file in the CMS source scripts (output.f90) that must have a line changed in order for my output to work correctly. If viewing a compiled CMS directory, the filepath is /CMS/cms-master/src/output.f90. On line 305 of output.f90, the line must be replaced with the below to allow for a higher number of decimal places in our trajectory output files:
+
+'(I8,1x, I8,1x, I12,1x, F8.4,1x, F8.5,1x, F8.4,1x, F12.3,1x, I2,1x, F12.3,1x, I6,1x, F6.1,1x, F10.7)') &
+
+ 
+
+To facilitate this change, would it require producing a new singularity with that specific line changed? I hope this is an easy thing to implement! Also lastly, my understanding is that the singularity is set up specifically to work through smic – however, is SM3 also a possibility? My project will likely be RAM-limited if anything.
