@@ -1,5 +1,5 @@
-% % Load the event file
-% load('D:\Dissertation\CMS_traj\output\CMS_traj\Q1_2019\event_2019_Jan01_120000.mat')
+% Load the event file
+load('D:\Dissertation\CMS_traj\output\CMS_traj\Q1_2019\event_2019_Jan01_120000.mat')
 
 % Randomly select a source reef from this event
 rand_idx = randi(length(event_data));
